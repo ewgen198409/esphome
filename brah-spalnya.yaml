@@ -1,0 +1,129 @@
+esphome:
+  name: brah-spalnya
+  friendly_name: Brah-spalnya
+  on_boot:
+    then: 
+      - light.turn_off:
+          id: brah_spalnya_lamp
+
+bk72xx:
+  board: generic-bk7231t-qfn32-tuya
+
+# Enable logging
+# logger:
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: "A+xLM79G2f7hVt1VqNu2u090EHyfxqGEUhjZ1ZYZZ9I="
+  reboot_timeout: 1800s
+
+ota:
+  platform: esphome
+  
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Brah-Spalnya Fallback Hotspot"
+    password: "BKjXhbhhYvcb"
+
+text_sensor:
+  - platform: libretiny
+    version:
+      name: LibreTiny Version
+
+  - platform: wifi_info
+    ip_address:
+      name: IP Address ${friendly_name}
+    ssid:
+      name: SSID
+
+binary_sensor:
+  - platform: gpio
+    id: binary_switch_1
+    pin:
+      number: P6
+      inverted: false
+      mode: INPUT_PULLUP
+    on_click:
+      - min_length: 10ms
+        max_length: 500ms
+        then:
+          - light.toggle: brah_spalnya_lamp
+ 
+      - min_length: 501ms
+        max_length: 2000ms
+        then:
+          - homeassistant.service:
+              service: light.toggle
+              data:
+                entity_id: light.light_spalnya_light_spalnya
+
+  - platform: gpio
+    id: binary_switch_2
+    pin:
+      number: P8
+      inverted: false
+      mode: INPUT_PULLUP
+    on_click:
+      - min_length: 10ms
+        max_length: 500ms
+        then:
+          - light.toggle: brah_spalnya_lamp
+          
+      - min_length: 501ms
+        max_length: 2000ms
+        then:
+          - homeassistant.service:
+              service: light.toggle
+              data:
+                entity_id: light.light_spalnya_light_spalnya
+             
+# ================== Счетик времени включенного света =======================
+sensor:
+  - platform: duty_time
+    id: lightspalnya_work_time
+    name: Light Spalnya Bra Время работы
+    icon: mdi:alarm-plus
+    update_interval: 10s
+    accuracy_decimals: 0
+    device_class: duration
+    lambda: "return id(brah_spalnya_lamp).current_values.is_on() == true;"
+    restore: true
+    last_time:
+      name: Light Spalnya Bra посл. время работы
+# ===================================================================================   
+  - platform: wifi_signal
+    name: WiFi Strength ${friendly_name}
+    update_interval: 60s
+    id: wifi_signal_db
+  - platform: copy # Reports the WiFi signal strength in %
+    source_id: wifi_signal_db
+    name: "WiFi Signal Percent ${device_name}"
+    filters:
+      - lambda: return min(max(2 * (x + 100.0), 0.0), 100.0);
+    unit_of_measurement: " %"
+    entity_category: "diagnostic"
+    device_class: ""
+
+output:
+  - id: light_output
+    platform: gpio
+    pin: P24
+
+light:
+  - platform: binary
+    name: "Light Brah Spalnya"
+    id: brah_spalnya_lamp
+    output: light_output
+    icon: mdi:light-flood-down
+    restore_mode: RESTORE_DEFAULT_OFF
+
+#status_led:
+#  pin:
+#    number: P7
+#    inverted: true
+    

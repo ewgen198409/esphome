@@ -1,0 +1,52 @@
+esphome:
+  name: ventilation
+
+bk72xx:
+  board: generic-bk7231t-qfn32-tuya
+
+api:
+  encryption:
+    key: "A+xLM79G2f7hVt1VqNu2u090EHyfxqGEUhjZ1ZYKH9I="
+  reboot_timeout: 1800s
+
+ota:
+  platform: esphome
+  
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Ventilation Fallback Hotspot"
+    password: "BKjXhbhhYvcb"
+
+button:
+  - platform: restart
+    name: Restart
+
+sensor:
+  - platform: uptime
+    name: Uptime
+
+binary_sensor:
+  - platform: gpio
+    id: binary_switch_1
+    pin:
+      number: P6
+      inverted: true
+      mode: INPUT_PULLUP
+    on_press:
+      then:
+        - switch.toggle: switch_1
+
+switch:
+  - platform: gpio
+    id: switch_1
+    name: Relay 1
+    pin: P24
+
+status_led:
+  pin:
+    number: P7
+    inverted: true

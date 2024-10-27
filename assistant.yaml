@@ -1,0 +1,192 @@
+substitutions:
+  voice_assist_idle_phase_id: '1'
+  voice_assist_listening_phase_id: '2'
+  voice_assist_thinking_phase_id: '3'
+  voice_assist_replying_phase_id: '4'
+  voice_assist_not_ready_phase_id: '10'
+  voice_assist_error_phase_id: '11'
+  voice_assist_muted_phase_id: '12'
+
+esphome:
+  name: assistant
+  friendly_name: assistant
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+# Enable logging
+logger:
+  level: info
+# Enable Home Assistant API
+api:
+  encryption:
+    key: "xU+7Iu5zAoRgqLvcqEu81PgBHBZs5bBp72ZI8lV+sG0="
+
+ota:
+  password: "71590accc593d48142d13f3043c9c653"
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  manual_ip:
+    static_ip: 192.168.1.125
+    gateway: 192.168.1.1
+    subnet: 255.255.255.0
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Assistant Fallback Hotspot"
+    password: "EjmLv91YGcDf"
+
+captive_portal:
+
+
+button:
+  - platform: restart
+    name: "Reboot"
+
+  - platform: template
+    name: "Restart voice assistant"
+    on_press:
+      - if:
+          condition: voice_assistant.is_running
+          then:
+            - logger.log: 
+                format: "Stopping voice assistant"
+                level: INFO
+            - voice_assistant.stop:
+            - delay: 1s
+            - logger.log: 
+                format: "Start voice assistant"
+                level: INFO
+            - voice_assistant.start_continuous:
+          else:
+            - logger.log: 
+                format: "Start voice assistant"
+                level: INFO
+            - voice_assistant.start_continuous:
+
+rtttl:
+  speaker: external_speaker
+  id: my_rtttl
+
+i2s_audio:
+  - id: i2s_in
+    i2s_lrclk_pin: GPIO25
+    i2s_bclk_pin: GPIO26
+  - id: i2s_out
+    i2s_lrclk_pin: GPIO33
+    i2s_bclk_pin: GPIO03
+
+microphone:
+  platform: i2s_audio
+  id: external_microphone
+  adc_type: external
+  i2s_audio_id: i2s_in
+  i2s_din_pin: GPIO34
+  pdm: false
+  bits_per_sample: 32bit
+
+speaker:
+  platform: i2s_audio
+  id: external_speaker
+  dac_type: external
+  i2s_audio_id: i2s_out
+  i2s_dout_pin: GPIO32
+  mode: mono
+
+voice_assistant:
+  microphone: external_microphone
+  id: va
+  noise_suppression_level: 2
+  auto_gain: 31dBFS
+  volume_multiplier: 2.5
+  use_wake_word: false
+  speaker: external_speaker
+
+  on_error: 
+    - if:
+        condition:
+          switch.is_on: use_wake_word
+        then:
+
+          - switch.turn_off: use_wake_word
+          - delay: 1sec 
+          - switch.turn_on: use_wake_word      
+  
+  on_client_connected:
+    - if:
+        condition:
+          switch.is_on: use_wake_word
+        then:
+          - voice_assistant.start_continuous:
+
+  on_client_disconnected:
+    - if:
+        condition:
+          switch.is_on: use_wake_word
+        then:
+          - voice_assistant.stop:
+
+binary_sensor:
+  - platform: status
+    name: API Connection
+    id: api_connection
+    filters:
+      - delayed_on: 1s
+    on_press:
+      - if:
+          condition:
+            switch.is_on: use_wake_word
+          then:
+            - voice_assistant.start_continuous:
+    on_release:
+      - if:
+          condition:
+            switch.is_on: use_wake_word
+          then:
+            - voice_assistant.stop:
+
+  - platform: gpio
+    pin:
+      number: GPIO14
+      inverted: true
+      mode:
+        input: true
+        pullup: true
+    name: Talk Switch
+    id: Swith_speak
+    internal: True
+    on_click:
+      - min_length: 100ms
+        max_length: 1000ms
+        then:
+          - rtttl.play: "Cat:d=16,o=6,b=95:32d,32d#,32d,32d#"
+          - delay: 1s
+          - voice_assistant.start:
+      - min_length: 3000ms
+        max_length: 7000ms
+        then:
+          - switch.toggle:
+              id: use_wake_word
+
+switch:
+  - platform: template
+    name: Use wake word
+    id: use_wake_word
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    entity_category: config
+    on_turn_on:
+      - lambda: id(va).set_use_wake_word(true);
+      - if:
+          condition:
+            not:
+              - voice_assistant.is_running
+          then:
+            - voice_assistant.start_continuous
+    
+    on_turn_off:
+      - voice_assistant.stop
+      - lambda: id(va).set_use_wake_word(false);

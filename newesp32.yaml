@@ -1,0 +1,100 @@
+esphome:
+  name: newesp32
+  friendly_name: newesp32
+
+esp32:
+  board: nodemcu-32s
+  framework:
+    type: esp-idf
+    
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: "TdtdezBhz8HD4aRcskyYLMIS/d1MlpVMRmptILvRqB8="
+
+ota:
+  - platform: esphome
+    password: "dd1b94197b081a52c3755f62bbe366d4"
+
+wifi:
+  networks:
+    - ssid: !secret wifi_ssid
+      password: !secret wifi_password
+    - ssid: OpenWrt_Garage
+      password: "9514210798"
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Newesp32 Fallback Hotspot"
+    password: "nuaISEvSh51h"
+
+captive_portal:
+
+font:
+  - file: "fonts/DS-DIGIB.ttf"
+    id: tahoma_clock
+    size: 38
+  - file: "fonts/timesnewromanpsmt.ttf"
+    id: ComicNeue
+    size: 10
+
+time:
+  - platform: sntp
+    id: sntp_time
+    timezone: Asia/Omsk
+    servers:
+      - 0.pool.ntp.org
+      - 1.pool.ntp.org
+      - 2.pool.ntp.org
+
+binary_sensor:
+  - platform: gpio
+    id: button
+    pin:
+      number: GPIO21
+      mode: INPUT_PULLUP
+      inverted: true
+
+
+sensor:
+  - platform: rotary_encoder
+    id: encoder
+    name: "Rotary Encoder"
+    pin_b:
+      number: GPIO18
+      mode: INPUT
+    pin_a:
+      number: GPIO19
+      mode: INPUT
+    max_value: 100
+    min_value: 0
+    on_value:
+      then:
+        - display.page.show: page2
+
+i2c:
+  sda: GPIO22
+  scl: GPIO23
+
+display:
+  - platform: ssd1306_i2c
+    model: "SSD1306 128x64"
+#    reset_pin: GPIO0
+    address: 0x3C
+    update_interval: 10ms
+    on_page_change:
+      - from: page1
+        to: page2
+        then:
+          - delay: 15s
+          - display.page.show: page1
+    pages:
+      - id: page1
+        lambda: |-
+          it.strftime(0, 0, id(tahoma_clock), "%H:%M:%S", id(sntp_time).now());
+      - id: page2
+        lambda: |-
+          it.printf(0, 0, id(tahoma_clock), "Vol: %.0f", id(encoder).state);

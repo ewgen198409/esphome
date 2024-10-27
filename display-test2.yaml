@@ -1,0 +1,59 @@
+esphome:
+  name: display-test2
+  friendly_name: Display_test2
+
+esp8266:
+  board: nodemcuv2
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: "jXLuGPn1M/Ji2qW21NwvSkgIIAO/IxW7DC0NDPR8jYs="
+
+ota:
+  password: "d78247ab81b5afd315d8f91ecec91e04"
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Display-Test2 Fallback Hotspot"
+    password: "zmlkTbJoGgdx"
+
+captive_portal:
+font:
+  - file: "fonts/DS-DIGIB.ttf"
+    id: tahoma_clock
+    size: 21
+  - file: "fonts/tahomabd.ttf"
+    id: tahoma_16
+    size: 16
+  - file: "fonts/timesnewromanpsmt.ttf"
+    id: ComicNeue
+    size: 10
+  - file: "fonts/tahomabd.ttf"
+    id: tahoma_digits
+    size: 16
+
+spi:
+  clk_pin: D5
+  mosi_pin: D6
+#i2c:
+#  sda: D6
+#  scl: D5
+
+display:
+  - platform: st7920
+    id: my_display
+    width: 128
+    height: 80
+#    dc_pin: D3
+    cs_pin: D7
+#    reset_pin: D4
+    lambda: |-
+        it.print(0, 10, id(tahoma_16), "Hello World!");
