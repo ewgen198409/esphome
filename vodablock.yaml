@@ -169,7 +169,19 @@ one_wire:
 binary_sensor:
   - platform: status
     name: "Vodablock Status"
-    
+
+  # Настройка физической кнопки
+  - platform: gpio
+    id: fiz_switch
+    internal: true
+    pin:
+      number: GPIO1
+      inverted: true
+      mode: INPUT_PULLUP
+    on_press:
+      then:
+        - switch.toggle: switch_nasos
+
   - platform: template
     name: "Сенсор утечки 2"
     id: sensor_leak_2
