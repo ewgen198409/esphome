@@ -173,11 +173,13 @@ binary_sensor:
   # Настройка физической кнопки
   - platform: gpio
     id: fiz_switch
+    name: Физ кнопка
     internal: true
     pin:
-      number: GPIO1
-      inverted: true
-      mode: INPUT_PULLUP
+      number: GPIO01
+      mode: 
+        input: true
+        pullup: true
     on_press:
       then:
         - switch.toggle: switch_nasos
