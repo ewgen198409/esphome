@@ -41,7 +41,7 @@ wifi:
   reboot_timeout: 60min
 
 external_components:
-  source: github://ewgen198409/esphome/custom_components
+  source: github://ewgen198409/esphome/components
   components: [mq]
   refresh: 0s
 
