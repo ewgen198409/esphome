@@ -86,34 +86,6 @@ switch:
           id(auto_mode) = false;
 
 sensor:
-  # - platform: adc
-  #   pin: A0
-  #   name: "CO concentration"
-  #   device_class: CARBON_MONOXIDE
-  #   accuracy_decimals: 1
-  #   id: co_sensor
-  #   update_interval: 5s
-  #   filters:
-  #     - lambda: return (x * 1024/5); // WITHOUT PROPER CALIBRATION YOU WILL NOT GET SERIOUS RESULTS
-  #   unit_of_measurement: "ppm"
-  #   icon: 'mdi:fire'
-  #   on_value_range:
-  #     - above: !lambda "return id(co_threshold).state;"
-  #       then:
-  #         if:
-  #           condition:
-  #             switch.is_on: auto_fan
-  #           then:
-  #             - fan.turn_on: relay_fan_garage
-  #             - rtttl.play: 'smbdeath:d=4,o=5,b=90:32c6,32c6,32c6,8p,16b,16f6,16p,16f6,16f.6,16e.6,16d6,16c6,16p,16e,16p,16c'
-  #     - below: !lambda "return id(co_threshold).state - id(hysteresis).state;"
-  #       then:
-  #         if:
-  #           condition:
-  #             switch.is_on: auto_fan
-  #           then:
-  #             - fan.turn_off: relay_fan_garage
-  
   - platform: uptime
     name: Uptime
     id: uptime_human
@@ -199,6 +171,13 @@ interval:
                 } else if (CO < id(lower_threshold)) {
                   id(relay_fan_garage).turn_off();
                 }
+      - if:
+          condition:
+            - lambda: |-
+                return id(co_sensor).state > id(upper_threshold);
+          then:
+            - rtttl.play: 'siren:d=8,o=5,b=100:d,e,d,e,d,e,d,e'
+
 fan:
   - platform: binary
     name: "RelayFan"
@@ -206,10 +185,6 @@ fan:
     output: fan_output
     id: relay_fan_garage
     restore_mode: RESTORE_DEFAULT_OFF
-#    availability:
-#    state_topic: garage/fan_state_topic
-#    command_topic: garage/fan_command_topic
-#    command_retain: false
 
 light:
   - platform: binary
@@ -218,10 +193,6 @@ light:
     output: light_output
     icon: mdi:light-flood-down
     restore_mode: RESTORE_DEFAULT_OFF
-#    availability:
-#    state_topic: garage/doorlight_state_topic
-#    command_topic: garage/doorlight_command_topic
-#    command_retain: false
 
 output:
   - platform: esp8266_pwm
