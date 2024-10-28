@@ -40,6 +40,11 @@ wifi:
   # если отвалился wifi - перезагружать каждый час
   reboot_timeout: 60min
 
+external_components:
+  source: github://ewgen198409/esphome/custom_components
+  components: [mq]
+  refresh: 0s
+
 captive_portal:
 
 text_sensor:
@@ -233,11 +238,6 @@ output:
 
 rtttl:
   output: rtttl_out
-
-external_components:
-  source: github://ananyevgv/esphome-components
-  components: [mq]
-  refresh: 0s
 
 # Слайдеры для настройки порогов в Home Assistant
 number:
