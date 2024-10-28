@@ -21,6 +21,7 @@ preferences:
 logger:
 
 api:
+  # если отвалился api ha - ничего не делать
   reboot_timeout: 0s
   encryption:
     key: "AxmKtUF5x1HHDYVusVzUtAV4H8WE013HRPRmpt4afqM="
@@ -36,6 +37,7 @@ wifi:
       password: !secret wifi_password
     - ssid: Keenetic-Home
       password: "9994554500"
+  # если отвалился wifi - перезагружать каждый час
   reboot_timeout: 60min
   manual_ip:
     static_ip: 192.168.1.164
