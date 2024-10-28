@@ -7,11 +7,13 @@ esp8266:
   restore_from_flash: true
 preferences:
   flash_write_interval: 60min
-# Enable logging
+
 logger:
 
 # Enable Home Assistant API
 api:
+  # если отвалился api ha - ничего не делать
+  reboot_timeout: 0s
   encryption:
     key: "yd9jYCvW0L0QG9G+c7RwK9L5lod62mjgGa0TZIfPARM="
 
@@ -35,13 +37,9 @@ wifi:
   ap:
     ssid: "Garage Dangeres Hotspot"
     password: "00000000"
+  # если отвалился wifi - перезагружать каждый час
+  reboot_timeout: 60min
 
-#mqtt:
-#  broker: 192.168.1.1
-#  port: 1883
-# username:
-# password:
-  
 captive_portal:
 
 text_sensor:
@@ -69,45 +67,66 @@ binary_sensor:
 
 switch:
   - platform: template
-    name: "Auto Fan"
-    icon: "mdi:fan-auto"
-    restore_mode: RESTORE_DEFAULT_ON
-    optimistic: True
-    id: auto_fan
+    name: "Авто режим вентиляции по CO"
+    icon: mdi:fan-auto
+    optimistic: true
+    id: auto_mode_switch
+    restore_mode: RESTORE_DEFAULT_OFF
+    turn_on_action:
+      - lambda: |-
+          id(auto_mode) = true;
+
+    turn_off_action:
+      - lambda: |-
+          id(auto_mode) = false;
 
 sensor:
-  - platform: adc
-    pin: A0
-    name: "CO concentration"
-    device_class: CARBON_MONOXIDE
-    accuracy_decimals: 1
-    id: co_sensor
-    update_interval: 5s
-    filters:
-      - lambda: return (x * 1024/5); // WITHOUT PROPER CALIBRATION YOU WILL NOT GET SERIOUS RESULTS
-    unit_of_measurement: "ppm"
-    icon: 'mdi:fire'
-    on_value_range:
-      - above: !lambda "return id(co_threshold).state;"
-        then:
-          if:
-            condition:
-              switch.is_on: auto_fan
-            then:
-              - fan.turn_on: relay_fan_garage
-              - rtttl.play: 'smbdeath:d=4,o=5,b=90:32c6,32c6,32c6,8p,16b,16f6,16p,16f6,16f.6,16e.6,16d6,16c6,16p,16e,16p,16c'
-      - below: !lambda "return id(co_threshold).state - id(hysteresis).state;"
-        then:
-          if:
-            condition:
-              switch.is_on: auto_fan
-            then:
-              - fan.turn_off: relay_fan_garage
+  # - platform: adc
+  #   pin: A0
+  #   name: "CO concentration"
+  #   device_class: CARBON_MONOXIDE
+  #   accuracy_decimals: 1
+  #   id: co_sensor
+  #   update_interval: 5s
+  #   filters:
+  #     - lambda: return (x * 1024/5); // WITHOUT PROPER CALIBRATION YOU WILL NOT GET SERIOUS RESULTS
+  #   unit_of_measurement: "ppm"
+  #   icon: 'mdi:fire'
+  #   on_value_range:
+  #     - above: !lambda "return id(co_threshold).state;"
+  #       then:
+  #         if:
+  #           condition:
+  #             switch.is_on: auto_fan
+  #           then:
+  #             - fan.turn_on: relay_fan_garage
+  #             - rtttl.play: 'smbdeath:d=4,o=5,b=90:32c6,32c6,32c6,8p,16b,16f6,16p,16f6,16f.6,16e.6,16d6,16c6,16p,16e,16p,16c'
+  #     - below: !lambda "return id(co_threshold).state - id(hysteresis).state;"
+  #       then:
+  #         if:
+  #           condition:
+  #             switch.is_on: auto_fan
+  #           then:
+  #             - fan.turn_off: relay_fan_garage
   
   - platform: uptime
     name: Uptime
     id: uptime_human
     icon: mdi:clock-start
+
+  - platform: wifi_signal
+    name: WiFi CO Garage
+    update_interval: 60s
+    id: wifi_signal_db
+
+  - platform: copy # Reports the WiFi signal strength in %
+    source_id: wifi_signal_db
+    name: "WiFi Percent CO Garage"
+    filters:
+      - lambda: return min(max(2 * (x + 100.0), 0.0), 100.0);
+    unit_of_measurement: "%"
+    entity_category: "diagnostic"
+    device_class: ""
 
   - platform: dht
     pin: D4
@@ -127,6 +146,54 @@ sensor:
     name: WiFi Strength
     update_interval: 60s
 
+  - platform: mq
+    model: MQ7
+    pin: A0
+    update_interval: 2s
+    sensor_lpg:
+      name: Sensor LPG
+    sensor_ch4:
+      name: Sensor CH4
+    sensor_co:
+      name: Sensor CO
+      id: co_sensor
+    sensor_alcohol:
+      name: Sensor Alcohol
+    sensor_h2:
+      name: Sensor H2
+
+globals:
+  - id: time_state
+    type: int
+  - id: upper_threshold
+    type: float
+    restore_value: true
+    initial_value: '1.0'
+  - id: lower_threshold
+    type: float
+    restore_value: true
+    initial_value: '0.8'
+  - id: auto_mode
+    type: bool
+    restore_value: true
+    initial_value: 'true'  # Автоматический режим включён по умолчанию
+
+# Логика автоматического управления вентилятором
+interval:
+  - interval: 10s
+    then:
+    # Скрипт автоматического управления вентилятором по влажности
+      - if:
+          condition:
+            lambda: 'return id(auto_mode);'  # Проверка: включён ли автоматический режим
+          then:
+            - lambda: |-
+                float CO = id(co_sensor).state;
+                if (CO > id(upper_threshold)) {
+                  id(relay_fan_garage).turn_on();
+                } else if (CO < id(lower_threshold)) {
+                  id(relay_fan_garage).turn_off();
+                }
 fan:
   - platform: binary
     name: "RelayFan"
@@ -167,27 +234,38 @@ output:
 rtttl:
   output: rtttl_out
 
+external_components:
+  source: github://ananyevgv/esphome-components
+  components: [mq]
+  refresh: 0s
+
+# Слайдеры для настройки порогов в Home Assistant
 number:
   - platform: template
-    name: "Порог CO (ppm)"
-    id: co_threshold
-    min_value: 0
-    max_value: 100
-    step: 1
-    mode: slider
+    name: "Верхний порог CO"
+    icon: mdi:waves-arrow-right
+    min_value: 0.0
+    max_value: 1.0
+    step: 0.1
     optimistic: true
-    initial_value: 50
-    restore_value: True
-    device_class: CARBON_MONOXIDE
+    id: upper_threshold_number
+    initial_value: 1.0
+    restore_value: true
+    set_action:
+      - lambda: |-
+          id(upper_threshold) = x;
 
   - platform: template
-    name: "Гистерезис"
-    id: hysteresis
-    min_value: 0
-    max_value: 20
-    step: 1
-    mode: slider
-    initial_value: 5
-    restore_value: True
+    name: "Нижний порог CO"
+    icon: mdi:waves-arrow-left
+    min_value: 0.0
+    max_value: 1.0
+    step: 0.1
     optimistic: true
+    id: lower_threshold_number
+    initial_value: 0.8
+    restore_value: true
+    set_action:
+      - lambda: |-
+          id(lower_threshold) = x;
 
