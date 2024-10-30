@@ -45,7 +45,7 @@ wifi:
     subnet: 255.255.255.0
   on_connect:
     then:
-      - rtttl.play: 'two_short:d=4,o=5,b=100:16e6,16e6'
+      - rtttl.play: 'scale_up:d=32,o=5,b=100:c,c#,d#,e,f#,g#,a#,b'
 
   ap:
     ssid: "Vodablock Fallback Hotspot"
@@ -385,8 +385,10 @@ time:
 # two_short:d=4,o=5,b=100:16e6,16e6
 # long:d=1,o=5,b=100:e6
 # siren:d=8,o=5,b=100:d,e,d,e,d,e,d,e
+# scale_up:d=32,o=5,b=100:c,c#,d#,e,f#,g#,a#,b
 output:
   - platform: ledc
+    frequency: 15000Hz
     pin: 
       number: GPIO19
 #      ignore_pin_validation_error: true
