@@ -6,7 +6,7 @@ esp8266:
   board: nodemcuv2
   restore_from_flash: true
 preferences:
-  flash_write_interval: 60min
+  flash_write_interval: 1min
 
 logger:
 
@@ -47,6 +47,10 @@ external_components:
 
 captive_portal:
 
+button:
+  - platform: restart
+    name: Restart
+
 text_sensor:
   - platform: wifi_info
     ip_address:
@@ -76,7 +80,7 @@ switch:
     icon: mdi:fan-auto
     optimistic: true
     id: auto_mode_switch
-    restore_mode: RESTORE_DEFAULT_OFF
+    restore_mode: RESTORE_DEFAULT_ON
     turn_on_action:
       - lambda: |-
           id(auto_mode) = true;
@@ -140,8 +144,6 @@ sensor:
       name: Sensor H2
 
 globals:
-  - id: time_state
-    type: int
   - id: upper_threshold
     type: float
     restore_value: true
@@ -155,6 +157,15 @@ globals:
     restore_value: true
     initial_value: 'true'  # Автоматический режим включён по умолчанию
 
+time:
+  - platform: sntp
+    id: homeassistant_time
+    timezone: Asia/Omsk
+    servers:
+      - 0.openwrt.pool.ntp.org
+      - 1.openwrt.pool.ntp.org
+      - 2.openwrt.pool.ntp.org
+
 # Логика автоматического управления вентилятором
 interval:
   - interval: 10s
@@ -165,12 +176,15 @@ interval:
             lambda: 'return id(auto_mode);'  # Проверка: включён ли автоматический режим
           then:
             - lambda: |-
-                float CO = id(co_sensor).state;
-                if (CO > id(upper_threshold)) {
-                  id(relay_fan_garage).turn_on();
-                } else if (CO < id(lower_threshold)) {
-                  id(relay_fan_garage).turn_off();
+                float co = id(co_sensor).state;
+                if (co > id(upper_threshold)) {
+                  auto call = id(relay_fan_garage).turn_on();
+                  call.perform();
+                } else if (co < id(lower_threshold)) {
+                  auto call = id(relay_fan_garage).turn_off();
+                  call.perform();
                 }
+
       - if:
           condition:
             - lambda: |-
@@ -192,7 +206,7 @@ light:
     id: garage_door_lamp
     output: light_output
     icon: mdi:light-flood-down
-    restore_mode: RESTORE_DEFAULT_OFF
+    restore_mode: ALWAYS_OFF
 
 output:
   - platform: esp8266_pwm
