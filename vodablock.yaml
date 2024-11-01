@@ -69,6 +69,39 @@ text_sensor:
       strftime(str, sizeof(str), "%Y-%m-%d %H:%M", localtime(&currTime));
       return  { str };
     update_interval: 60s
+
+  # Таймер света Тело таймера находится в HA
+  - platform: homeassistant
+    id: timer_light
+    name: Сенсор таймера света
+    entity_id: timer.taimer
+    on_value:
+      then:
+        - lambda: |-
+              if (x == "active") {
+                id(switch_light).turn_on();
+              } else {
+                id(switch_light).turn_off();
+              }
+
+  # Сенсор датчика движения в ванной. Переходит из HA
+  - platform: homeassistant
+    id: motion_sensor
+    name: Сенсор движения в ванной
+    entity_id: binary_sensor.switch1
+    on_value:
+      then:
+        - if:
+            condition:
+              - text_sensor.state:
+                  id: motion_sensor
+                  state: 'on'
+            then:
+              - homeassistant.service:
+                  service: timer.start
+                  data:
+                    entity_id: timer.taimer
+                    duration: !lambda "return id(timerlight_enter).state;"
 # ===============================================================
 button:
   - platform: restart
@@ -120,8 +153,9 @@ switch:
 
   # Доп реле
   - platform: gpio
-    id: switch_dop
-    name: Реле доп
+    id: switch_light
+    icon: mdi:track-light
+    name: Реле подсветки
     pin:
       number: GPIO13
       mode:
@@ -653,6 +687,20 @@ number:
     max_value: 23
     step: 1
     optimistic: true
+    restore_value: true
+
+  # Настройка времени подсветки
+  - platform: template
+    name: "Время подсветки (сек)"
+    icon: mdi:timer-sand-complete
+    id: timerlight_enter
+    mode: box
+    unit_of_measurement: s
+    min_value: 5
+    max_value: 360
+    step: 1
+    optimistic: true
+    initial_value: 60
     restore_value: true
 # =================================================================
 
