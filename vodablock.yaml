@@ -43,6 +43,7 @@ wifi:
     static_ip: 192.168.1.164
     gateway: 192.168.1.1
     subnet: 255.255.255.0
+    dns1: 77.88.8.8
   on_connect:
     then:
       - rtttl.play: 'scale_up:d=32,o=5,b=100:c,c#,d#,e,f#,g#,a#,b'
@@ -59,6 +60,15 @@ text_sensor:
       name: IP Address
     ssid:
       name: SSID
+
+  - platform: template
+    name: "Current time"
+    lambda: |-
+      char str[17];
+      time_t currTime = id(homeassistant_time).now().timestamp;
+      strftime(str, sizeof(str), "%Y-%m-%d %H:%M", localtime(&currTime));
+      return  { str };
+    update_interval: 60s
 # ===============================================================
 button:
   - platform: restart
@@ -367,9 +377,14 @@ time:
     id: homeassistant_time
     timezone: Asia/Omsk
     servers:
-      - 0.openwrt.pool.ntp.org
-      - 1.openwrt.pool.ntp.org
-      - 2.openwrt.pool.ntp.org
+      - 0.pool.ntp.org
+      - 1.pool.ntp.org
+      - 2.pool.ntp.org
+
+    on_time_sync:
+      then:
+        - logger.log: "Synchronized system clock"
+
     on_time:
       # Every 10 seconds
       - seconds: /10
@@ -379,6 +394,7 @@ time:
            if (id(time_state) > 1) {
               id(time_state) = 0;
            }
+
 
 # ================================================================
 # ============== init Buzzer =====================================
