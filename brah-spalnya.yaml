@@ -30,6 +30,11 @@ wifi:
     ssid: "Brah-Spalnya Fallback Hotspot"
     password: "BKjXhbhhYvcb"
 
+udp:
+  binary_sensors:
+    - binary_switch_1
+    - binary_switch_2
+
 text_sensor:
   - platform: libretiny
     version:
@@ -42,6 +47,17 @@ text_sensor:
       name: SSID
 
 binary_sensor:
+  - platform: udp
+    provider: light-spalnya
+    id: binary_switch_spalnya
+    remote_id: binary_switch
+    internal: true
+    on_click:
+      - min_length: 510ms
+        max_length: 5000ms
+        then:
+          light.toggle: brah_spalnya_lamp
+
   - platform: gpio
     id: binary_switch_1
     pin:
@@ -53,14 +69,6 @@ binary_sensor:
         max_length: 500ms
         then:
           - light.toggle: brah_spalnya_lamp
- 
-      - min_length: 501ms
-        max_length: 2000ms
-        then:
-          - homeassistant.service:
-              service: light.toggle
-              data:
-                entity_id: light.light_spalnya_light_spalnya
 
   - platform: gpio
     id: binary_switch_2
@@ -73,14 +81,6 @@ binary_sensor:
         max_length: 500ms
         then:
           - light.toggle: brah_spalnya_lamp
-          
-      - min_length: 501ms
-        max_length: 2000ms
-        then:
-          - homeassistant.service:
-              service: light.toggle
-              data:
-                entity_id: light.light_spalnya_light_spalnya
              
 # ================== Счетик времени включенного света =======================
 sensor:

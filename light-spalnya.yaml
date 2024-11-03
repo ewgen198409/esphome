@@ -26,6 +26,10 @@ wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
   ap:
+# Отправляем в сеть свой бинарный сенсор (binary_switch)
+udp:
+  binary_sensors:
+    - binary_switch
 
 text_sensor:
   - platform: libretiny
@@ -39,6 +43,29 @@ text_sensor:
       name: SSID
 
 binary_sensor:
+  # Принимаем из сети бинаный сенсор (binary_switch_1 из выключателей бра) и управляем им основным светом
+  - platform: udp
+    provider: brah-spalnya
+    id: binary_switch_bra_1
+    remote_id: binary_switch_1
+    internal: true
+    on_click:
+      - min_length: 510ms
+        max_length: 5000ms
+        then:
+          light.toggle: spalnya_lamp
+
+  - platform: udp
+    provider: brah-spalnya
+    id: binary_switch_bra_2
+    remote_id: binary_switch_2
+    internal: true
+    on_click:
+      - min_length: 510ms
+        max_length: 5000ms
+        then:
+          light.toggle: spalnya_lamp
+
   - platform: gpio
     id: binary_switch
     pin:
@@ -47,7 +74,7 @@ binary_sensor:
       mode: INPUT_PULLUP
     on_click:
       - min_length: 10ms
-        max_length: 1000ms
+        max_length: 500ms
         then:
           - light.toggle: spalnya_lamp
           - if:
@@ -60,14 +87,6 @@ binary_sensor:
               else:
                 - light.turn_off: status_led_1
                 
-      - min_length: 1001ms
-        max_length: 2000ms
-        then:
-          - homeassistant.service:
-              service: light.toggle
-              data:
-                entity_id: light.brah_spalnya_light_brah_spalnya
-
 # ================== Счетик времени включенного света =======================
 sensor:
   - platform: duty_time
@@ -81,7 +100,7 @@ sensor:
     restore: true
     last_time:
       name: Light Spalnya посл. время работы
-# ===================================================================================    
+# ===================================================================================
   - platform: wifi_signal
     name: WiFi Strength ${device_name}
     update_interval: 60s
