@@ -43,7 +43,7 @@ text_sensor:
       name: SSID
 
 binary_sensor:
-  # Принимаем из сети бинаный сенсор (binary_switch_1 из выключателей бра) и управляем им основным светом
+  # Принимаем из сети бинаный сенсор (binary_switch_1 и binary_switch_2 из выключателей бра) и управляем им основным светом
   - platform: udp
     provider: brah-spalnya
     id: binary_switch_bra_1
