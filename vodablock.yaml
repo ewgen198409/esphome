@@ -1,4 +1,13 @@
 # =============  ignore_pin_validation_error: true (for pin GPIO12 or GPIO13) =========================
+#  C:\Users\[YOUR_USERNAME]\AppData\Local\Programs\Python\Python311\Lib\site-packages\esphome\components\esp32\gpio_esp32_c3.py
+# _ESP32C3_SPI_PSRAM_PINS = {
+#    # 12: "SPIHD",
+#    # 13: "SPIWP",
+#      14: "SPICS0",
+#      15: "SPICLK",
+#      16: "SPID",
+#      17: "SPIQ",
+#  }
 
 esphome:
   name: vodablock
@@ -413,8 +422,8 @@ time:
     timezone: Asia/Omsk
     servers:
       - 0.pool.ntp.org
-      - 1.pool.ntp.org
-      - 2.pool.ntp.org
+      - 192.168.1.1
+      - 2.openwrt.pool.ntp.org
 
     on_time_sync:
       then:
@@ -462,7 +471,9 @@ climate:
     visual:
       min_temperature: 10
       max_temperature: 80
-      temperature_step: 1.0
+      temperature_step:
+        target_temperature: 1.0
+        current_temperature: 0.1
     default_target_temperature_low: 40.0 °C
     default_target_temperature_high: 55.0 °C
 

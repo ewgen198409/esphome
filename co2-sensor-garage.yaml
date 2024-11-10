@@ -28,6 +28,12 @@ ota:
   platform: esphome
   password: "096ae24d59f1990fc2e41f4d9f0cce64"
 
+udp:
+  sensors:
+    - garage_temp
+    - co_sensor
+    - garage_hum
+
 wifi:
   networks:
     - ssid: !secret wifi_ssid
@@ -115,10 +121,12 @@ sensor:
     model: DHT11
     temperature:
       name: "Garage Temperature"
+      id: garage_temp
       filters:
         - lambda: return x - 4;
       unit_of_measurement: °C
     humidity:
+      id: garage_hum
       name: "Garage Humidity"
       unit_of_measurement: '% RH'
     update_interval: 5s
@@ -185,13 +193,6 @@ interval:
                   call.perform();
                 }
 
-      - if:
-          condition:
-            - lambda: |-
-                return id(co_sensor).state > id(upper_threshold);
-          then:
-            - rtttl.play: 'siren:d=8,o=5,b=100:d,e,d,e,d,e,d,e'
-
 fan:
   - platform: binary
     name: "RelayFan"
@@ -199,6 +200,8 @@ fan:
     output: fan_output
     id: relay_fan_garage
     restore_mode: RESTORE_DEFAULT_OFF
+    on_turn_on:
+      - rtttl.play: 'scale_up:d=32,o=5,b=100:c,c#,d#,e,f#,g#,a#,b'
 
 light:
   - platform: binary
