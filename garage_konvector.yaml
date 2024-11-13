@@ -1,11 +1,18 @@
 
-esphome:
+# GPIO0 — кнопка (это понятно, когда мы включали бутлоадер)
+# GPIO12 — красный светодиод и реле
+# GPIO13 — синий светодиод
+# GPIO14 и GPIO4 выведены на разъем подключения датчиков.
+substitutions:
   name: garage-konvector
-  friendly_name: garage_konvector
+
+esphome:
+  name: ${name}
 
 esp8266:
   board: sonoff_th
 
+udp:
 logger:
 
 api:
@@ -28,4 +35,143 @@ wifi:
     password: "XN2wmpQxIxit"
 
 captive_portal:
-    
+time:
+  - platform: sntp
+    id: ntp_time
+    timezone: Asia/Omsk
+    servers:
+      - 0.openwrt.pool.ntp.org
+      - 1.openwrt.pool.ntp.org
+      - 192.168.1.1 
+    on_time: 
+      - hours: 7-9,17-20    # 7-10, 17-21 ПИК
+        minutes: 0-59
+        seconds: 0
+        then:
+          lambda: |-
+            if (id(switch_peack_off).state && id(thermostat_garage_konvector).mode == climate::CLIMATE_MODE_HEAT && id(ntp_time).now().is_valid()) {
+              auto call = id(thermostat_garage_konvector).make_call();
+              call.set_mode(climate::CLIMATE_MODE_OFF);
+              call.perform();
+            } else if (id(thermostat_garage_konvector).mode == climate::CLIMATE_MODE_OFF) {
+              id(switch_peack_off).turn_off();
+            }
+
+      - hours: 0-6,10-16,21-23   # ДЕНЬ, НОЧЬ
+        minutes: 0-59
+        seconds: 0
+        then:
+          lambda: |- 
+            if (id(switch_peack_off).state && id(thermostat_garage_konvector).mode == climate::CLIMATE_MODE_OFF && id(ntp_time).now().is_valid()){
+              auto call = id(thermostat_garage_konvector).make_call();
+              call.set_mode(climate::CLIMATE_MODE_HEAT);
+              call.perform();
+            }
+
+button:
+  - platform: restart
+    name: Restart ${name}
+
+text_sensor:
+  - platform: wifi_info
+    ip_address:
+      name: IP Address ${name}
+    ssid:
+      name: SSID ${name}  
+
+  - platform: template
+    name: "Current time ${name}"
+    lambda: |-
+      char str[17];
+      time_t currTime = id(ntp_time).now().timestamp;
+      strftime(str, sizeof(str), "%Y-%m-%d %X", localtime(&currTime));
+      return  { str };
+    update_interval: 60s
+
+light:
+  - platform: monochromatic
+    name: "Blue LED ${name}"
+    output: blue_led
+    internal: true
+
+switch:
+  - platform: gpio
+    id: relay
+    name: Relay ${name}
+    pin: GPIO12
+
+  # Выключатель отпления в пиковую зону
+  - platform: template
+    name: "Выключать ${name} в ПИК"
+    optimistic: true
+    icon: mdi:clock
+    id: switch_peack_off
+    restore_mode: RESTORE_DEFAULT_ON
+
+output:
+  - platform: esp8266_pwm
+    id: blue_led
+    pin: GPIO13
+    inverted: True
+
+binary_sensor:
+  - platform: gpio
+    pin:
+      number: GPIO0
+      mode: INPUT_PULLUP
+      inverted: True
+    name: "Button ${name}"
+
+sensor:
+  - platform: uptime
+    name: Uptime ${name}
+
+  - platform: udp
+    provider: co2-sensor-garage
+    remote_id: garage_temp
+    id: garage_temp
+    internal: true
+
+  - platform: copy
+    source_id: wifi_signal_db
+    name: "WiFi Signal ${name}"
+    filters:
+      - lambda: return min(max(2 * (x + 100.0), 0.0), 100.0);
+    unit_of_measurement: "%"
+    entity_category: "diagnostic"
+    device_class: ""
+
+  - platform: wifi_signal
+    name: WiFi Strength ${name}
+    update_interval: 60s
+    id: wifi_signal_db
+
+    # Общее время наработки конвектора
+  - platform: duty_time
+    id: convector_work_time
+    name: Конвектор Время работы
+    icon: mdi:alarm-plus
+    update_interval: 1s
+    restore: true
+    lambda: "return id(relay).state;"
+
+climate:
+  - platform: thermostat
+    id: thermostat_garage_konvector
+    name: "Thermostat ${name}"
+    visual:
+      min_temperature: 5
+      max_temperature: 25
+      temperature_step:
+        target_temperature: 1.0
+        current_temperature: 0.1
+    sensor: garage_temp
+    min_heating_off_time: 10s
+    min_heating_run_time: 10s
+    min_idle_time: 10s
+    heat_deadband: 1.0
+    heat_overrun: 0.0
+    heat_action:
+      - switch.turn_on: relay
+    idle_action:
+      - switch.turn_off: relay
