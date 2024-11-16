@@ -13,8 +13,10 @@ logger:
 
 <<: !include lvgl\lvgl.yaml
 <<: !include display\display.yaml
-<<: !include climate\climate.yaml
 <<: !include sensors\sensors.yaml
+
+climate: !include climate\climate.yaml
+font: !include font\font.yaml
 
 api:
   encryption:
@@ -56,7 +58,6 @@ light:
     name: "Display Backlight"
     id: back_light
     restore_mode: RESTORE_DEFAULT_ON
-    
 
 text:
   - platform: lvgl
@@ -67,38 +68,6 @@ text:
     internal: true
 
 
-font:
-  - file: "fonts/tahoma.ttf"
-    id: tahoma_12
-    size: 12
-    bpp: 4
-    extras:
-      - file: "fonts/materialdesignicons-webfont.ttf"
-        glyphs: [
-          "\U000F02D1", # mdi-heart
-          "\U000F05D4", # mdi-airplane-landing
-          "\U000F0F55",
-          "\U000F0425", # mdi:power
-          "\U000F0238", # mdi:fire
-          "\U000F17BF", # mdi:arrow-up-right
-          "\U000F0393", # mdi:thermostat
-          ]
-
-  - file: "fonts/tahoma.ttf"
-    id: tahoma_14
-    size: 14
-    bpp: 4
-    extras:
-      - file: "fonts/materialdesignicons-webfont.ttf"
-        glyphs: [
-          "\U000F02D1", # mdi-heart
-          "\U000F05D4", # mdi-airplane-landing
-          "\U000F0F55",
-          "\U000F0425", # mdi:power
-          "\U000F0238", # mdi:fire
-          "\U000F17BF", # mdi:arrow-up-right
-          "\U000F0393", # mdi:thermostat
-          ]
 # interval:
 #   - interval: 10s
 #     then:
