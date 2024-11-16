@@ -1,0 +1,29 @@
+sensor:
+  - platform: rotary_encoder
+    id: encoder_rotary
+    name: "stehlampe Rotary"
+    pin_a: GPIO32
+    pin_b: GPIO33
+    internal: true
+
+  - platform: udp
+    provider: co2-sensor-garage
+    remote_id: garage_temp
+    id: garage_temp
+    internal: true
+    on_value:
+      - lvgl.label.update:
+          id: lbl_outemp
+          text:
+            format: "\U000F0F55 %.1f°c"
+            args: [ 'x' ]
+
+binary_sensor: # Button encoder
+  - platform: gpio
+    pin:
+      number: GPIO25
+      mode: INPUT_PULLUP
+      inverted: true
+    id: enc_switch
+    name: "Encoder button"
+    internal: true

@@ -1,0 +1,111 @@
+esphome:
+  name: test
+  on_boot:
+    - delay: 7s
+    - lvgl.widget.hide: boot_screen
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+logger:
+
+<<: !include lvgl\lvgl.yaml
+<<: !include display\display.yaml
+<<: !include climate\climate.yaml
+<<: !include sensors\sensors.yaml
+
+api:
+  encryption:
+    key: "qsQmKLMvLh9REAS68i5MFrn5GKYXswAaDVRsCVhWNfw="
+
+ota:
+  - platform: esphome
+    password: ""
+
+wifi:
+  ssid: Keenetic-Home
+  password: "9994554500"
+  on_connect:
+    then:
+      - lvgl.widget.show: lbl_wifitatus
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Test Fallback Hotspot"
+    password: "2BgdJnlx1D7T"
+
+udp:
+captive_portal:
+
+switch:
+  - platform: gpio
+    id: relay
+    name: Relay 2
+    pin: GPIO15
+
+output:
+  - platform: ledc
+    pin: GPIO2
+    id: backlight_pwm
+
+light:
+  - platform: monochromatic
+    output: backlight_pwm
+    name: "Display Backlight"
+    id: back_light
+    restore_mode: RESTORE_DEFAULT_ON
+    
+
+text:
+  - platform: lvgl
+    id: state_text
+    widget: lbl_state
+    name: "Thermostat state text"
+    mode: text 
+    internal: true
+
+
+font:
+  - file: "fonts/tahoma.ttf"
+    id: tahoma_12
+    size: 12
+    bpp: 4
+    extras:
+      - file: "fonts/materialdesignicons-webfont.ttf"
+        glyphs: [
+          "\U000F02D1", # mdi-heart
+          "\U000F05D4", # mdi-airplane-landing
+          "\U000F0F55",
+          "\U000F0425", # mdi:power
+          "\U000F0238", # mdi:fire
+          "\U000F17BF", # mdi:arrow-up-right
+          "\U000F0393", # mdi:thermostat
+          ]
+
+  - file: "fonts/tahoma.ttf"
+    id: tahoma_14
+    size: 14
+    bpp: 4
+    extras:
+      - file: "fonts/materialdesignicons-webfont.ttf"
+        glyphs: [
+          "\U000F02D1", # mdi-heart
+          "\U000F05D4", # mdi-airplane-landing
+          "\U000F0F55",
+          "\U000F0425", # mdi:power
+          "\U000F0238", # mdi:fire
+          "\U000F17BF", # mdi:arrow-up-right
+          "\U000F0393", # mdi:thermostat
+          ]
+# interval:
+#   - interval: 10s
+#     then:
+image:
+  - file: https://esphome.io/_static/favicon-512x512.png
+    id: boot_logo
+    resize: 80x80
+    type: RGB565
+    use_transparency: true
+
