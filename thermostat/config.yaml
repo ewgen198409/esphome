@@ -67,10 +67,10 @@ text:
     mode: text 
     internal: true
 
-
 # interval:
 #   - interval: 10s
 #     then:
+
 image:
   - file: https://esphome.io/_static/favicon-512x512.png
     id: boot_logo
@@ -78,3 +78,30 @@ image:
     type: RGB565
     use_transparency: true
 
+button:
+  - platform: restart
+    name: Thermostat Restart 
+
+time:
+  - platform: sntp
+    id: ntp_time
+    timezone: Asia/Omsk
+    servers:
+      - 0.pool.ntp.org
+      - 192.168.1.1
+      - 2.openwrt.pool.ntp.org
+
+    on_time_sync:
+      then:
+        - logger.log: "Synchronized system clock"
+
+    on_time:
+      - seconds: 0,30
+        then:
+          lambda: |-
+            if (id(ntp_time).now().is_valid()) {
+              char str[17];
+              auto currTime = id(ntp_time).now().timestamp;
+              strftime(str, sizeof(str), "%H:%M", localtime(&currTime));
+              lv_label_set_text(id(lbl_time), str);
+            }

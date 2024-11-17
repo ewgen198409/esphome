@@ -12,6 +12,8 @@
           "\U000F0238", # mdi:fire
           "\U000F17BF", # mdi:arrow-up-right
           "\U000F0393", # mdi:thermostat
+          "\U000F08BB", # mdi:cog-outline
+          "\U000F07D0", # mdi:home-assistant
           ]
 
   - file: "fonts/tahoma.ttf"
@@ -28,4 +30,6 @@
           "\U000F0238", # mdi:fire
           "\U000F17BF", # mdi:arrow-up-right
           "\U000F0393", # mdi:thermostat
+          "\U000F08BB", # mdi:cog-outline
+          "\U000F07D0", # mdi:home-assistant
           ]

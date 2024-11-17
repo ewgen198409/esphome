@@ -5,18 +5,73 @@ sensor:
     pin_a: GPIO32
     pin_b: GPIO33
     internal: true
+    filters:
+      debounce: 30ms
 
   - platform: udp
     provider: co2-sensor-garage
     remote_id: garage_temp
     id: garage_temp
     internal: true
+
+
+  - platform: ntc
+    sensor: resistance_sensor
+    id: ntc_temp
+    calibration:
+      b_constant: 3950
+      reference_temperature: 25°C
+      reference_resistance: 30kOhm
+    name: NTC Temperature
+    unit_of_measurement: "°C"
+    device_class: "temperature"
+    state_class: "measurement"
+    accuracy_decimals: 1
     on_value:
+      - lvgl.label.update:
+          id: lbl_testtemp
+          text:
+            format: "\U000F0F55 %.1f°c"
+            args: [ 'x' ]
+
       - lvgl.label.update:
           id: lbl_outemp
           text:
             format: "\U000F0F55 %.1f°c"
             args: [ 'x' ]
+
+  - platform: resistance
+    id: resistance_sensor
+    sensor: source_sensor
+    configuration: UPSTREAM
+    resistor: 10kOhm
+    reference_voltage: 3.3v
+    name: Resistance Sensor
+
+  - platform: adc
+    id: source_sensor
+    name: ADC NTC
+    pin: GPIO35
+    attenuation: auto
+    update_interval: 5s
+
+  - platform: wifi_signal
+    name: WiFi Thermostat
+    update_interval: 60s
+    id: wifi_signal_db
+
+  - platform: copy
+    source_id: wifi_signal_db
+    name: "WiFi Percent Thermostat"
+    filters:
+      - lambda: return min(max(2 * (x + 100.0), 0.0), 100.0);
+    unit_of_measurement: "%"
+    entity_category: "diagnostic"
+    device_class: ""
+
+
+
+
 
 binary_sensor: # Button encoder
   - platform: gpio
@@ -27,3 +82,20 @@ binary_sensor: # Button encoder
     id: enc_switch
     name: "Encoder button"
     internal: true
+    filters:
+      - delayed_off: 50ms
+      - delayed_on: 50ms
+
+  - platform: status
+    name: "Thermostat Status"
+
+
+
+text_sensor:
+  - platform: wifi_info
+    ip_address:
+      name: IP Address
+    ssid:
+      name: SSID
+
+      

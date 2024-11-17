@@ -7,7 +7,7 @@
       temperature_step:
         target_temperature: 1.0
         current_temperature: 0.1
-    sensor: garage_temp
+    sensor: ntc_temp
     min_heating_off_time: 10s
     min_heating_run_time: 10s
     min_idle_time: 10s
