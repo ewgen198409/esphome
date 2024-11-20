@@ -1,8 +1,23 @@
+substitutions:
+  backlight: "0.30"   # яркость подсветки на заставке 
+  screensaver: "1min"  # задержка заставки
+#   # ========== Гистерезис =============
+#   heat_overrun: "0.5"          # нагревает выше + 0.5 от заданной
+#   heat_deadband: "0.5"         # остывает на - 0.5 от заданной
+#   # ===================================
+  
 esphome:
   name: test
   on_boot:
     - delay: 7s
     - lvgl.widget.hide: boot_screen
+    - lambda: |-
+        id(thermostat_house).set_heat_deadband(id(heat_deadband) / 10);
+        id(thermostat_house).set_heat_overrun(id(heat_overrun) / 10);
+    - script.execute: back_to_screensaver
+    - lvgl.slider.update:
+        id: slider_light
+        value: !lambda return id(set_brghtness);
 
 esp32:
   board: esp32dev
@@ -21,14 +36,29 @@ font: !include font\font.yaml
 api:
   encryption:
     key: "qsQmKLMvLh9REAS68i5MFrn5GKYXswAaDVRsCVhWNfw="
-
+  on_client_connected:
+    - if:
+        condition:
+          lambda: 'return (0 == client_info.find("Home Assistant "));'
+        then:
+          - lvgl.widget.show: lbl_apistatus
+  on_client_disconnected:
+    - if:
+        condition:
+          lambda: 'return (0 == client_info.find("Home Assistant "));'
+        then:
+          - lvgl.widget.hide: lbl_apistatus
+          
 ota:
   - platform: esphome
     password: ""
 
 wifi:
-  ssid: Keenetic-Home
-  password: "9994554500"
+  networks:
+    - ssid: OpenWrt
+      password: "9514210798"
+    - ssid: Keenetic-Home
+      password: "9994554500"
   on_connect:
     then:
       - lvgl.widget.show: lbl_wifitatus
@@ -40,6 +70,9 @@ wifi:
 
 udp:
 captive_portal:
+i2c:
+  sda: GPIO22
+  scl: GPIO23
 
 switch:
   - platform: gpio
@@ -58,6 +91,11 @@ light:
     name: "Display Backlight"
     id: back_light
     restore_mode: RESTORE_DEFAULT_ON
+    # on_state:
+    #   then:
+    #     - lvgl.slider.update:
+    #         id: slider_light
+    #         value: !lambda return (id(back_light).current_values.get_brightness() * 100);
 
 text:
   - platform: lvgl
@@ -80,6 +118,7 @@ image:
 
 button:
   - platform: restart
+    id: restart_button
     name: Thermostat Restart 
 
 time:
@@ -94,6 +133,7 @@ time:
     on_time_sync:
       then:
         - logger.log: "Synchronized system clock"
+        - script.execute: time_update
 
     on_time:
       - seconds: 0,30
@@ -105,3 +145,55 @@ time:
               strftime(str, sizeof(str), "%H:%M", localtime(&currTime));
               lv_label_set_text(id(lbl_time), str);
             }
+
+      - minutes: '*'
+        seconds: 0
+        then:
+          - script.execute: time_update
+
+script:
+  - id: time_update   # скрипт часов на заставке
+    then:
+      - lvgl.label.update:
+          id: lvgl_clock_minute
+          text:
+            format: "%02d"
+            args: [ 'id(ntp_time).now().minute' ]
+
+      - lvgl.label.update:
+          id: lvgl_clock_hour
+          text:
+            format: "%02d"
+            args: [ 'id(ntp_time).now().hour' ]
+      - lvgl.label.update:
+          id: lvgl_clock_longdate
+          text:
+            format: "%02d.%02d.%04d"
+            args: 
+              - 'id(ntp_time).now().day_of_month'
+              - 'id(ntp_time).now().month'
+              - 'id(ntp_time).now().year'
+          
+  - id: back_to_screensaver    # Скрипт таймер перехода на заставку
+    mode: restart
+    then:
+      - delay: ${screensaver}
+      - lvgl.page.show: page_time
+      - lvgl.widget.hide: status_bar
+      - lambda: id(back_light).turn_on().set_brightness(${backlight}).perform();
+
+globals:
+  - id: heat_deadband
+    type: float
+    initial_value: "0.5"
+    restore_value: yes
+
+  - id: heat_overrun
+    type: float
+    initial_value: "0.5"
+    restore_value: yes
+
+  - id: set_brghtness
+    type: float
+    initial_value: "0.5"
+    restore_value: yes

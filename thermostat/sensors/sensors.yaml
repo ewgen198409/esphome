@@ -2,17 +2,52 @@ sensor:
   - platform: rotary_encoder
     id: encoder_rotary
     name: "stehlampe Rotary"
-    pin_a: GPIO32
-    pin_b: GPIO33
+    pin_a:
+      number: GPIO32
+      mode:
+        input: true
+        pullup: true
+    pin_b:
+      number: GPIO33
+      mode:
+        input: true
+        pullup: true
     internal: true
     filters:
       debounce: 30ms
+    on_clockwise:
+      - if:
+          condition:
+            - lambda: |-
+                  return id(back_light).current_values.get_brightness() <= ${backlight} + 0.05;
+          then:
+            - lvgl.widget.show: status_bar
+            - lvgl.page.show: page_one
+            - delay: 0.5s
+            - lvgl.slider.update:
+                id: slider_light
+                value: !lambda return id(set_brghtness);
+            - script.execute: back_to_screensaver
 
-  - platform: udp
-    provider: co2-sensor-garage
-    remote_id: garage_temp
-    id: garage_temp
-    internal: true
+    on_anticlockwise:
+      - if:
+          condition:
+            - lambda: |-
+                  return id(back_light).current_values.get_brightness() <= ${backlight} + 0.05;
+          then:
+            - lvgl.widget.show: status_bar
+            - lvgl.page.show: page_one
+            - delay: 0.5s
+            - lvgl.slider.update:
+                id: slider_light
+                value: !lambda return id(set_brghtness);
+            - script.execute: back_to_screensaver
+              
+  # - platform: udp
+  #   provider: co2-sensor-garage
+  #   remote_id: garage_temp
+  #   id: garage_temp
+  #   internal: true
 
 
   - platform: ntc
@@ -69,6 +104,16 @@ sensor:
     entity_category: "diagnostic"
     device_class: ""
 
+  # "Sonoff THS01 - SI7021"
+  - platform: htu21d
+    model: SI7021
+    temperature:
+      name: "SI7021 Temperature"
+      id: sens_temp
+    humidity:
+      name: "SI7021 Humidity"
+      id: sens_humi
+    update_interval: 1s
 
 
 
@@ -98,4 +143,3 @@ text_sensor:
     ssid:
       name: SSID
 
-      

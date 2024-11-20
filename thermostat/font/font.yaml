@@ -14,6 +14,8 @@
           "\U000F0393", # mdi:thermostat
           "\U000F08BB", # mdi:cog-outline
           "\U000F07D0", # mdi:home-assistant
+          "\U000F0E04", # mdi:thermometer-minus
+          "\U000F0E05", # mdi:thermometer-plus
           ]
 
   - file: "fonts/tahoma.ttf"
@@ -32,4 +34,6 @@
           "\U000F0393", # mdi:thermostat
           "\U000F08BB", # mdi:cog-outline
           "\U000F07D0", # mdi:home-assistant
+          "\U000F0E04", # mdi:thermometer-minus
+          "\U000F0E05", # mdi:thermometer-plus
           ]

@@ -25,7 +25,7 @@ lvgl:
 
   top_layer:
     widgets:
-    # Экран загрузки
+      # Экран загрузки
       - obj:
           id: boot_screen
           x: 0
@@ -37,6 +37,7 @@ lvgl:
           radius: 0
           pad_all: 0
           border_width: 0
+          
           widgets:
             - image:
                 align: CENTER
@@ -63,6 +64,7 @@ lvgl:
                 y: -47
                 text: "\U000F0393 Home \n thermostat"
 
+            # Фактическая температура
             - label:
                 id: lbl_testtemp
                 text_align: center
@@ -75,11 +77,13 @@ lvgl:
           on_press:
             - lvgl.widget.hide: boot_screen
 
-        # Заголовок
+      # Заголовок
       - obj:
           align: TOP_MID
+          id: status_bar
           styles: header_footer
           widgets:
+            # Часы в статус баре
             - label:
                 text: "ESPHome"
                 id: lbl_time
@@ -89,7 +93,7 @@ lvgl:
                 text_color: 0xFFFFFF
                 x: -1
                 y: -2
-
+            # Значек wifi в статус баре
             - label:
                 text: "\uF1EB"
                 id: lbl_wifitatus
@@ -100,19 +104,30 @@ lvgl:
                 text_align: right
                 text_color: 0xFFFFFF
                 text_font: montserrat_10
+            
+            # Значек коннекта с HA (API)
+            - label:
+                text: "\U000F07D0"
+                id: lbl_apistatus
+                hidden: true
+                x: 95
+                y: -1
+                text_align: center
+                text_color: 0xFFFFFF
+                text_font: tahoma_12
 
   pages:
+    # Страница термостата
     - id: page_one
       widgets:
-
         - arc:
             x: 0
             y: 12
             arc_color: white
             id: arc_therm
-            value: !lambda return id(thermostat_garage_konvector).target_temperature;
-            min_value: 10
-            max_value: 40
+            value: !lambda return id(thermostat_house).target_temperature;
+            min_value: 10.0
+            max_value: 40.0
             adjustable: true
             width: 80%
             height: 80%
@@ -134,10 +149,10 @@ lvgl:
             on_value:
               then:
                 - climate.control:
-                    id: thermostat_garage_konvector
-                    target_temperature: !lambda return int(x);
+                    id: thermostat_house
+                    target_temperature: !lambda return x;
 
-              
+        # кнопка - термостата      
         - button:
             id: spin_down
             x: 35
@@ -154,8 +169,10 @@ lvgl:
               outline_color: orange
               outline_opa: COVER
               outline_pad: 1
-            # on_click:
-            #   - lvgl.arc.decrement: arc_id
+            on_click:
+              - climate.control:
+                  id: thermostat_house
+                  target_temperature: !lambda return (id(thermostat_house).target_temperature - 0.5);
             widgets:
               - label:
                   text: "-"
@@ -164,6 +181,7 @@ lvgl:
                   text_align: center
                   text_color: 0xFFFFFF
 
+        # кнопка + термостата
         - button:
             id: spin_up
             width: 20
@@ -180,8 +198,10 @@ lvgl:
               outline_color: orange
               outline_opa: COVER
               outline_pad: 1
-            # on_click:
-            #   - lvgl.arc.increment: arc_id
+            on_click:
+              - climate.control:
+                  id: thermostat_house
+                  target_temperature: !lambda return (id(thermostat_house).target_temperature + 0.5);
             widgets:
               - label:
                   text: "+"
@@ -190,6 +210,7 @@ lvgl:
                   text_align: center
                   text_color: 0xFFFFFF
 
+        # Кнопка настроек
         - button:
             id: settings_button
             width: 20
@@ -206,8 +227,8 @@ lvgl:
               outline_color: orange
               outline_opa: COVER
               outline_pad: 0
-            # on_click:
-            #   - lvgl.arc.increment: arc_id
+            on_click:
+              - lvgl.page.show: page_settings
             widgets:
               - label:
                   text: "\U000F08BB"
@@ -216,7 +237,8 @@ lvgl:
                   text_font: tahoma_14
                   text_align: center
                   text_color: 0xFFFFFF
-
+         
+        # Заданная температура
         - label:
             align: CENTER
             id: lbl_intemp
@@ -224,7 +246,8 @@ lvgl:
             text: "--°c"
             text_color: 0xFFFFFF
             y: -9
-
+        
+        # Фактическая температура
         - label:
             align: CENTER
             id: lbl_outemp
@@ -233,7 +256,8 @@ lvgl:
             text: "\U000F0F55 --.-°c"
             text_color: 0xFFFFFF
             y: 10
-
+        
+        # Индикатор режима термостата
         - label:
             align: CENTER
             text_font: tahoma_12
@@ -243,6 +267,7 @@ lvgl:
             text_color: 0xFFFFFF
             y: -30
 
+        #  выбор режима термостата
         - dropdown:
             id: dropdown_id
             width: 120
@@ -283,7 +308,7 @@ lvgl:
             on_cancel:
               then:
                - climate.control:
-                  id: thermostat_garage_konvector
+                  id: thermostat_house
                   mode: !lambda |-
                           if (x == 0) {
                             return climate::CLIMATE_MODE_OFF;
@@ -291,4 +316,284 @@ lvgl:
                             return climate::CLIMATE_MODE_HEAT;
                           }
 
-              
+    # Страница настроек
+    - id: page_settings
+      widgets:
+        # слайдер яркости дисплея
+        - slider:
+            x: 50
+            y: 23
+            width: 70
+            height: 8
+            id: slider_light
+            value: !lambda return (id(back_light).current_values.get_brightness() * 100);
+            max_value: 100
+            min_value: 0
+            animated: true
+            outline_width: 1
+            outline_color: red
+            pad_all: 1
+            focus_key:
+              outline_color: orange
+              outline_opa: COVER
+              outline_pad: 1
+            indicator:
+              pad_all: 1
+              bg_color: orange
+              arc_width: 3
+              focused:
+                bg_color: orange
+            knob:
+              bg_color: orange
+              pad_all: 3
+              focused:
+                bg_color: red
+            on_value:
+              then:
+                - lambda: |-
+                    id(back_light).turn_on().set_brightness(x / 100).perform();
+                    id(set_brghtness) = x;
+                  
+        - label:
+            text_font: tahoma_12
+            id: lbl_light
+            text: "Light:"
+            text_color: white
+            x: 2
+            y: 18
+
+        - line:
+            points:
+              - 3, 38
+              - 125, 38
+            line_width: 1
+            line_color: 0x0000FF
+            line_rounded: true
+
+        - label:
+            text_font: tahoma_12
+            id: lbl_gist
+            text: "Gisteresis:"
+            text_color: white
+            x: 2
+            y: 41
+
+        # Гистерезис ниже заданной
+        - spinbox:
+            id: gist_down
+            text_align: center
+            text_font: tahoma_12
+            focus_key:
+              outline_color: orange
+              outline_opa: COVER
+              outline_pad: 1
+            pad_all: 0
+            range_from: 0.0
+            range_to: 2.0
+            step: 0.5
+            digits: 2
+            decimal_places: 1
+            value: !lambda 'return id(heat_deadband);'
+            x: 80
+            y: 63
+            width: 45
+            height: 20
+            on_value:
+              then:
+                - lambda: |-
+                    id(thermostat_house).set_heat_deadband(x);
+                    id(heat_deadband) = x * 10;
+
+        - label:
+            text_font: tahoma_12
+            id: lbl_gistdown
+            text: "\U000F0E04 Down:"
+            text_color: white
+            x: 25
+            y: 64
+        
+        # Гистерезис выше заданной
+        - spinbox:
+            id: gist_up
+            text_align: center
+            text_font: tahoma_12
+            pad_all: 0
+            range_from: 0.0
+            range_to: 2.0
+            step: 0.5
+            focus_key:
+              outline_color: orange
+              outline_opa: COVER
+              outline_pad: 1
+            digits: 2
+            decimal_places: 1
+            value: !lambda 'return id(heat_overrun);'
+            x: 80
+            y: 91
+            width: 45
+            height: 20
+            on_value:
+              then:
+                - lambda: |-
+                    id(thermostat_house).set_heat_overrun(x);
+                    id(heat_overrun) = x * 10;
+                    
+        - label:
+            text_font: tahoma_12
+            id: lbl_gistup
+            text: "\U000F0E05 Up:"
+            text_color: white
+            x: 25
+            y: 91
+
+        - line:
+            points:
+              - 3, 120
+              - 125, 120
+            line_width: 1
+            line_color: 0x0000FF
+            line_rounded: true
+
+        # кнопка HOME
+        - button:
+            id: home_btn
+            x: 87
+            y: 140
+            width: 40
+            height: 17
+            checkable: false
+            bg_opa: TRANSP
+            focus_key:
+              outline_color: orange
+              outline_opa: COVER
+              outline_pad: 1
+            widgets:
+              - label:
+                  align: CENTER
+                  text: "\uF015"
+            on_click:
+              then:
+                lvgl.page.show: page_one
+
+        # кнопка перезагрузки
+        - button:
+            id: restart_btn
+            x: 2
+            y: 140
+            width: 40
+            height: 17
+            checkable: false
+            bg_opa: TRANSP
+            focus_key:
+              outline_color: orange
+              outline_opa: COVER
+              outline_pad: 1
+            widgets:
+              - label:
+                  align: CENTER
+                  text: "\uF021"
+            on_click:
+              then:
+                button.press: restart_button
+
+        # Кнопка часов        
+        - button:
+            id: clock_btn
+            x: 45
+            y: 140
+            width: 40
+            height: 17
+            checkable: false
+            bg_opa: TRANSP
+            focus_key:
+              outline_color: orange
+              outline_opa: COVER
+              outline_pad: 1
+            widgets:
+              - label:
+                  align: CENTER
+                  text: "Time"
+            on_click:
+              then:
+                - lvgl.page.show: page_time
+                - lvgl.widget.hide: status_bar
+                - light.turn_on:
+                    id: back_light
+                    brightness: ${backlight}
+
+    - id: page_time
+      bg_color: black
+      bg_opa: COVER
+      widgets:
+        - label:
+            id: lvgl_clock_longdate
+            x: 5
+            y: 20
+            width: SIZE_CONTENT
+            height: SIZE_CONTENT
+            text_color: 0xFFFFFF
+            text_font: montserrat_12
+            text_align: LEFT
+            text: " "
+        - obj:
+            x: -35
+            y: 0
+            align: CENTER
+            width: 50
+            height: 60
+            border_color: 0xFFFFFF
+            border_width: 2
+            border_opa: 30%
+            bg_color: 0x16417d
+            bg_opa: 30%
+            radius: 4
+            scrollbar_mode: "off"
+            pad_all: 0
+            widgets:
+              - label:
+                  id: lvgl_clock_hour
+                  x: 0
+                  y: 0
+                  align: CENTER
+                  width: SIZE_CONTENT
+                  height: SIZE_CONTENT
+                  text_color: 0xFFFFFF
+                  text_font: montserrat_24
+                  text_align: CENTER
+                  text: "00"
+        - obj:
+            x: 35
+            y: 0
+            align: CENTER
+            width: 50
+            height: 60
+            border_color: 0xFFFFFF
+            border_width: 2
+            border_opa: 30%
+            bg_color: 0x16417d
+            bg_opa: 30%
+            radius: 4
+            scrollbar_mode: "off"
+            pad_all: 0
+            widgets:
+              - label:
+                  id: lvgl_clock_minute
+                  x: 0
+                  y: 0
+                  align: CENTER
+                  width: SIZE_CONTENT
+                  height: SIZE_CONTENT
+                  text_color: 0xFFFFFF
+                  text_font: montserrat_24
+                  text_align: CENTER
+                  text: "00"
+        - label:
+            x: 0
+            y: 0
+            align: CENTER
+            width: SIZE_CONTENT
+            height: SIZE_CONTENT
+            text_color: 0xFFFFFF
+            text_font: montserrat_18
+            text_align: CENTER
+            text: ":"
