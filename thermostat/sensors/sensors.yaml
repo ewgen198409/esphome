@@ -16,6 +16,7 @@ sensor:
     filters:
       debounce: 30ms
     on_clockwise:
+      - lambda: id(back_to_screensaver).execute();
       - if:
           condition:
             - lambda: |-
@@ -30,6 +31,7 @@ sensor:
             - script.execute: back_to_screensaver
 
     on_anticlockwise:
+      - lambda: id(back_to_screensaver).execute();
       - if:
           condition:
             - lambda: |-

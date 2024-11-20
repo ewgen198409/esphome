@@ -209,34 +209,6 @@ lvgl:
                   pad_all: 2
                   text_align: center
                   text_color: 0xFFFFFF
-
-        # Кнопка настроек
-        - button:
-            id: settings_button
-            width: 20
-            height: 20
-            x: 107
-            y: 17
-            bg_opa: TRANSP
-            border_color: white
-            border_width: 0
-            shadow_color: black
-            radius: 10
-            pad_all: 1
-            focus_key:
-              outline_color: orange
-              outline_opa: COVER
-              outline_pad: 0
-            on_click:
-              - lvgl.page.show: page_settings
-            widgets:
-              - label:
-                  text: "\U000F08BB"
-                  align: center
-                  pad_all: 0
-                  text_font: tahoma_14
-                  text_align: center
-                  text_color: 0xFFFFFF
          
         # Заданная температура
         - label:
@@ -316,6 +288,35 @@ lvgl:
                             return climate::CLIMATE_MODE_HEAT;
                           }
 
+        # Кнопка настроек
+        - button:
+            id: settings_button
+            width: 20
+            height: 20
+            x: 107
+            y: 17
+            bg_opa: TRANSP
+            border_color: white
+            border_width: 0
+            shadow_color: black
+            radius: 10
+            pad_all: 1
+            focus_key:
+              outline_color: orange
+              outline_opa: COVER
+              outline_pad: 0
+            on_click:
+              - lvgl.page.show: page_settings
+            widgets:
+              - label:
+                  text: "\U000F08BB"
+                  align: center
+                  pad_all: 0
+                  text_font: tahoma_14
+                  text_align: center
+                  text_color: 0xFFFFFF
+
+
     # Страница настроек
     - id: page_settings
       widgets:
@@ -393,7 +394,7 @@ lvgl:
             step: 0.5
             digits: 2
             decimal_places: 1
-            value: !lambda 'return id(heat_deadband);'
+            value: !lambda 'return id(heat_deadband);'   // восстанавливаем значение при загрузке
             x: 80
             y: 63
             width: 45
@@ -402,7 +403,7 @@ lvgl:
               then:
                 - lambda: |-
                     id(thermostat_house).set_heat_deadband(x);
-                    id(heat_deadband) = x * 10;
+                    id(heat_deadband) = x * 10;  // сохранить в global чтобы восстановить при загрузке
 
         - label:
             text_font: tahoma_12
@@ -427,7 +428,7 @@ lvgl:
               outline_pad: 1
             digits: 2
             decimal_places: 1
-            value: !lambda 'return id(heat_overrun);'
+            value: !lambda 'return id(heat_overrun);'  // восстанавливаем значение при загрузке
             x: 80
             y: 91
             width: 45
@@ -436,7 +437,7 @@ lvgl:
               then:
                 - lambda: |-
                     id(thermostat_house).set_heat_overrun(x);
-                    id(heat_overrun) = x * 10;
+                    id(heat_overrun) = x * 10;    // сохранить в global чтобы восстановить при загрузке
                     
         - label:
             text_font: tahoma_12

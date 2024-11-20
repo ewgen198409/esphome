@@ -9,13 +9,13 @@ substitutions:
 esphome:
   name: test
   on_boot:
-    - delay: 7s
-    - lvgl.widget.hide: boot_screen
-    - lambda: |-
-        id(thermostat_house).set_heat_deadband(id(heat_deadband) / 10);
-        id(thermostat_house).set_heat_overrun(id(heat_overrun) / 10);
-    - script.execute: back_to_screensaver
-    - lvgl.slider.update:
+    - delay: 7s   # ждем 
+    - lvgl.widget.hide: boot_screen   # закрываем экран загрузки
+    - lambda: |-  
+        id(thermostat_house).set_heat_deadband(id(heat_deadband) / 10);  // восстанавливаем значение гистерезиса термостата
+        id(thermostat_house).set_heat_overrun(id(heat_overrun) / 10);  // восстанавливаем значение гистерезиса термостата
+    - lambda: id(back_to_screensaver).execute();    // запускаем скрипт перехода на заставку
+    - lvgl.slider.update:   # устанавливаем значение яркости из global
         id: slider_light
         value: !lambda return id(set_brghtness);
 
@@ -70,17 +70,21 @@ wifi:
 
 udp:
 captive_portal:
+
+# Датчик температуры si7021
 i2c:
   sda: GPIO22
   scl: GPIO23
 
 switch:
+  # основное реле термостата
   - platform: gpio
     id: relay
     name: Relay 2
     pin: GPIO15
 
 output:
+  # выход подсветки дисплея
   - platform: ledc
     pin: GPIO2
     id: backlight_pwm
@@ -104,10 +108,6 @@ text:
     name: "Thermostat state text"
     mode: text 
     internal: true
-
-# interval:
-#   - interval: 10s
-#     then:
 
 image:
   - file: https://esphome.io/_static/favicon-512x512.png
@@ -165,6 +165,7 @@ script:
           text:
             format: "%02d"
             args: [ 'id(ntp_time).now().hour' ]
+
       - lvgl.label.update:
           id: lvgl_clock_longdate
           text:
@@ -183,16 +184,19 @@ script:
       - lambda: id(back_light).turn_on().set_brightness(${backlight}).perform();
 
 globals:
+  # память гистерезиса
   - id: heat_deadband
     type: float
     initial_value: "0.5"
     restore_value: yes
 
+  # память гистерезиса
   - id: heat_overrun
     type: float
     initial_value: "0.5"
     restore_value: yes
 
+  # память заданной основной яркости
   - id: set_brghtness
     type: float
     initial_value: "0.5"
