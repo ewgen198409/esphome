@@ -394,7 +394,8 @@ lvgl:
             step: 0.5
             digits: 2
             decimal_places: 1
-            value: !lambda 'return id(heat_deadband);'   // восстанавливаем значение при загрузке
+            # восстанавливаем значение при загрузке
+            value: !lambda 'return id(heat_deadband);'
             x: 80
             y: 63
             width: 45
@@ -428,7 +429,8 @@ lvgl:
               outline_pad: 1
             digits: 2
             decimal_places: 1
-            value: !lambda 'return id(heat_overrun);'  // восстанавливаем значение при загрузке
+            # восстанавливаем значение при загрузке
+            value: !lambda 'return id(heat_overrun);'
             x: 80
             y: 91
             width: 45
