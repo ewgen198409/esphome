@@ -531,7 +531,7 @@ lvgl:
         - label:
             id: lvgl_clock_longdate
             x: 5
-            y: 20
+            y: 23
             width: SIZE_CONTENT
             height: SIZE_CONTENT
             text_color: 0xFFFFFF
@@ -600,3 +600,33 @@ lvgl:
             text_font: montserrat_18
             text_align: CENTER
             text: ":"
+
+        # Фактическая температура
+        - label:
+            id: lbl_temp1
+            text_align: center
+            text_font: tahoma_14
+            text: "\U000F050F --.-°c"
+            text_color: 0xFFFFFF
+            y: 0
+            x: 2
+
+        # Фактическая влажность
+        - label:
+            id: lbl_hum1
+            text_align: center
+            text_font: tahoma_14
+            text: "\U000F0E0A --.-%"
+            text_color: 0xFFFFFF
+            y: 0
+            x: 70
+
+        # иконка погоды
+        - label:
+            id: lbl_iconweather
+            text_font: tahoma_32
+            text_color: 0xFFFFFF
+            y: 119
+            x: 10
+            text: "--"
+           

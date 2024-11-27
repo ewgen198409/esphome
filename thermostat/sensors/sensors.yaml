@@ -112,12 +112,59 @@ sensor:
     temperature:
       name: "SI7021 Temperature"
       id: sens_temp
+      on_value:
+        - lvgl.label.update:
+            id: lbl_temp1
+            text:
+              format: "\U000F050F: %.1f°c"
+              args: [ 'id(sens_temp).state' ]
     humidity:
       name: "SI7021 Humidity"
       id: sens_humi
-    update_interval: 1s
+      on_value:
+        - lvgl.label.update:
+            id: lbl_hum1
+            text:
+              format: "\U000F0E0A: %.0f%%"
+              args: [ 'id(sens_humi).state' ]
+    update_interval: 5s
 
+  # Сенсоры погоды получены из HA
+  - platform: homeassistant
+    id: weather_temp
+    entity_id: weather.home_weather
+    attribute: temperature
+    internal: true
 
+  - platform: homeassistant
+    id: veter_speed
+    entity_id: weather.home_weather
+    attribute: wind_speed
+    internal: true
+
+  - platform: homeassistant
+    id: humidity
+    entity_id: weather.home_weather
+    attribute: humidity
+    internal: true
+
+  - platform: homeassistant
+    id: icon_weather
+    entity_id: sensor.today_icon
+    internal: true
+    on_value:
+      then:
+        - lambda: |-
+            if (x == 3.0f) {
+              lv_label_set_text(id(lbl_iconweather), "\U000F0599");
+            } else if (x == 1.0f) {
+              lv_label_set_text(id(lbl_iconweather), "\U000F0594");
+            } else if (x == 2.0f) {
+              lv_label_set_text(id(lbl_iconweather), "\U000F0590");
+            } else {
+              lv_label_set_text(id(lbl_iconweather), "\U000F0595");
+            }
+   # ===========================================================================
 
 
 binary_sensor: # Button encoder
@@ -144,4 +191,5 @@ text_sensor:
       name: IP Address
     ssid:
       name: SSID
+
 

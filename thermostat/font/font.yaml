@@ -16,6 +16,8 @@
           "\U000F07D0", # mdi:home-assistant
           "\U000F0E04", # mdi:thermometer-minus
           "\U000F0E05", # mdi:thermometer-plus
+          "\U000F0E0A", # mdi:water-outline
+          "\U000F050F", # mdi:thermometer
           ]
 
   - file: "fonts/tahoma.ttf"
@@ -36,4 +38,47 @@
           "\U000F07D0", # mdi:home-assistant
           "\U000F0E04", # mdi:thermometer-minus
           "\U000F0E05", # mdi:thermometer-plus
+          "\U000F0E0A", # mdi:water-outline
+          "\U000F050F", # mdi:thermometer
+          "\U000F0594",  # mdi:weather-night
+          "\U000F0590",  #  mdi:weather-cloudy
+          "\U000F0591",  # mdi:weather-fog
+          "\U000F067E", # mdi:weather-lightning-rainy
+          "\U000F0595", # mdi:weather-partly-cloudy
+          "\U000F0597", # mdi:weather-rainy
+          "\U000F0F36", # mdi:weather-snowy-heavy
+          "\U000F0599", # mdi:weather-sunny
+          "\U000F059D", # mdi:weather-windy
+          ]
+
+  - file: "fonts/tahoma.ttf"
+    id: tahoma_32
+    size: 32
+    bpp: 4
+    extras:
+      - file: "fonts/materialdesignicons-webfont.ttf"
+        glyphs: [
+          "\U000F02D1", # mdi-heart
+          "\U000F05D4", # mdi-airplane-landing
+          "\U000F0F55",
+          "\U000F0425", # mdi:power
+          "\U000F0238", # mdi:fire
+          "\U000F17BF", # mdi:arrow-up-right
+          "\U000F0393", # mdi:thermostat
+          "\U000F08BB", # mdi:cog-outline
+          "\U000F07D0", # mdi:home-assistant
+          "\U000F0E04", # mdi:thermometer-minus
+          "\U000F0E05", # mdi:thermometer-plus
+          "\U000F0E0A", # mdi:water-outline
+          "\U000F050F", # mdi:thermometer
+          # Значки погоды
+          "\U000F0594",  # mdi:weather-night
+          "\U000F0590",  #  mdi:weather-cloudy
+          "\U000F0591",  # mdi:weather-fog
+          "\U000F067E", # mdi:weather-lightning-rainy
+          "\U000F0595", # mdi:weather-partly-cloudy
+          "\U000F0597", # mdi:weather-rainy
+          "\U000F0F36", # mdi:weather-snowy-heavy
+          "\U000F0599", # mdi:weather-sunny
+          "\U000F059D", # mdi:weather-windy
           ]

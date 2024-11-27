@@ -1,5 +1,5 @@
 substitutions:
-  backlight: "0.30"   # яркость подсветки на заставке 
+  backlight: "0.50"   # яркость подсветки на заставке 
   screensaver: "1min"  # задержка заставки
 #   # ========== Гистерезис =============
 #   heat_overrun: "0.5"          # нагревает выше + 0.5 от заданной
@@ -7,7 +7,7 @@ substitutions:
 #   # ===================================
   
 esphome:
-  name: test
+  name: home-thermostat
   on_boot:
     - delay: 7s   # ждем 
     - lvgl.widget.hide: boot_screen   # закрываем экран загрузки
