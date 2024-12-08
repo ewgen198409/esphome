@@ -116,7 +116,7 @@ sensor:
         - lvgl.label.update:
             id: lbl_temp1
             text:
-              format: "\U000F050F: %.1f°c"
+              format: "\U000F050F: %.1f°"
               args: [ 'id(sens_temp).state' ]
     humidity:
       name: "SI7021 Humidity"
@@ -135,18 +135,36 @@ sensor:
     entity_id: weather.home_weather
     attribute: temperature
     internal: true
+    on_value:
+      - lvgl.label.update:
+          id: lbl_tempweather
+          text:
+            format: "Temp: %.0f°c"
+            args: [ 'id(weather_temp).state' ]
 
   - platform: homeassistant
     id: veter_speed
     entity_id: weather.home_weather
     attribute: wind_speed
     internal: true
+    on_value:
+      - lvgl.label.update:
+          id: lbl_windweather
+          text:
+            format: "Wind: %.0fkm/h"
+            args: [ 'id(veter_speed).state' ]
 
   - platform: homeassistant
     id: humidity
     entity_id: weather.home_weather
     attribute: humidity
     internal: true
+    on_value:
+      - lvgl.label.update:
+          id: lbl_humweather
+          text:
+            format: "Hum: %.0f%%"
+            args: [ 'id(humidity).state' ]
 
   - platform: homeassistant
     id: icon_weather
@@ -156,13 +174,23 @@ sensor:
       then:
         - lambda: |-
             if (x == 3.0f) {
-              lv_label_set_text(id(lbl_iconweather), "\U000F0599");
+              lv_label_set_text(id(lbl_iconweather), "\U000F0599");   // mdi:weather-sunny
             } else if (x == 1.0f) {
-              lv_label_set_text(id(lbl_iconweather), "\U000F0594");
+              lv_label_set_text(id(lbl_iconweather), "\U000F0594");   // mdi:weather-night
             } else if (x == 2.0f) {
-              lv_label_set_text(id(lbl_iconweather), "\U000F0590");
+              lv_label_set_text(id(lbl_iconweather), "\U000F0590");    // mdi:weather-cloudy
+            } else if (x == 13.0f) {
+              lv_label_set_text(id(lbl_iconweather), "\U000F067E");   // mdi:weather-lightning-rainy
+            } else if (x == 8.0f) {
+              lv_label_set_text(id(lbl_iconweather), "\U000F0595");  // mdi:weather-partly-cloudy
+            } else if (x == 9.0f) {
+              lv_label_set_text(id(lbl_iconweather), "\U000F0597");  // mdi:weather-rainy
+            } else if (x == 11.0f) {
+              lv_label_set_text(id(lbl_iconweather), "\U000F0F36");  // mdi:weather-snowy-heavy
+            } else if (x == 14.0f) {
+              lv_label_set_text(id(lbl_iconweather), "\U000F059D");   // mdi:weather-windy
             } else {
-              lv_label_set_text(id(lbl_iconweather), "\U000F0595");
+              lv_label_set_text(id(lbl_iconweather), "\U000F0595");    // mdi:weather-partly-cloudy
             }
    # ===========================================================================
 

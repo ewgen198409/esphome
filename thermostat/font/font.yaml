@@ -82,3 +82,8 @@
           "\U000F0599", # mdi:weather-sunny
           "\U000F059D", # mdi:weather-windy
           ]
+
+  - file: "fonts/DS-DIGI.ttf"
+    id: digital_36
+    size: 36
+    bpp: 4
