@@ -6,11 +6,18 @@ esp8266:
   board: d1_mini
   restore_from_flash: true
 
+# web_server:
+#   port: 80
+#   version: 2
+
+preferences:
+  flash_write_interval: 1min
+  
 # Enable logging
 logger:
 
-# Enable Home Assistant API
 api:
+  reboot_timeout: 0s
   encryption:
     key: "KOWDAA8XBu8jM5F884wvQ6ji5Mhwm2J29yZXx2C9Kko="
 
@@ -25,13 +32,19 @@ wifi:
     - ssid: Keenetic-Home
       password: "9994554500"
 
-  # Enable fallback hotspot (captive portal) in case wifi connection fails
   ap:
     ssid: "Block-Prihozka Fallback Hotspot"
     password: "mXyPb1kexKGo"
 
 udp:
 
+# ===================== MQTT ========================================
+mqtt:
+  broker: 192.168.1.1
+  port: 1883
+  discovery: false
+  discover_ip: false
+# ======================================================================
 captive_portal:
 
 # ================= TIME ====================================
@@ -55,6 +68,18 @@ text_sensor:
       name: IP Address
     ssid:
       name: SSID
+
+  # Сенсор времени ESPHOME
+  - platform: template
+    name: "Current time"
+    entity_category: "diagnostic"
+    lambda: |-
+      char str[20];  // Размер строки для хранения времени
+      auto currTime = id(ntp_time).now();
+      snprintf(str, sizeof(str), "%02d:%02d:%02d",
+                currTime.hour, currTime.minute, currTime.second);
+      return {str};  // Возвращаем строку как текстовый сенсор
+    update_interval: 60s
 # ================== Init relay ================================
 switch:
   - platform: gpio
@@ -79,37 +104,20 @@ switch:
         output: true
     restore_mode: ALWAYS_OFF
 
-  - platform: gpio
-    id: switch_2
-    name: Реле 2
-    icon: mdi:water-boiler
-    pin:
-      number: GPIO4
-      inverted: false
-      mode:
-        output: true
-    restore_mode: ALWAYS_OFF
-
-  - platform: gpio
-    id: switch_3
-    name: Реле 3
-    icon: mdi:water-boiler
-    pin:
-      number: GPIO0
-      inverted: false
-      mode:
-        output: true
-    restore_mode: ALWAYS_OFF
-
-  - platform: gpio
-    id: switch_4
-    name: Реле 4
-    icon: mdi:water-boiler
-    pin:
-      number: GPIO2
-      inverted: false
-      mode:
-        output: true
+  # Выключатель авто режима вентиляции по таймеру
+  - platform: template
+    name: "Авто режим вентиляции по таймеру"
+    icon: mdi:fan-auto
+    id: auto_fantimer
+    optimistic: true  # Для синхронизации состояния в Home Assistant
+    restore_mode: RESTORE_DEFAULT_OFF
+# ========================= Вентиляция ======================================
+fan:
+  - platform: binary
+    name: "RelayFan"
+    icon: 'mdi:fan'
+    output: fan_output
+    id: relay_fan_prihozka
     restore_mode: ALWAYS_OFF
 
 # ============== Init DS18B20 & DHT11 (датчики температуры) ====================
@@ -120,8 +128,8 @@ one_wire:
 sensor:
   # DS18B20
   - platform: dallas_temp
-    address: 0x687c70190264ff28
-    name: Датчик температуры холл
+    address: 0xca2d99bd0164ff28
+    name: "Holl Temperature"
     id: sensor_holl_temp
     update_interval: 1s
     unit_of_measurement: "°C"
@@ -129,7 +137,16 @@ sensor:
     device_class: "temperature"
     state_class: "measurement"
     accuracy_decimals: 1
-  
+    on_value:
+      then:
+        - mqtt.publish:
+            topic: tele/tas_house_2/SENSOR
+            payload: !lambda |-
+              char buffer[10];
+              sprintf(buffer, "%.1f", x);  // Формат значения с одним знаком после запятой
+              return buffer;
+            qos: 0
+            retain: true
   # DHT11
   - platform: dht
     pin: GPIO14
@@ -138,8 +155,8 @@ sensor:
     temperature:
       name: "Dvor Temperature"
       id: dvor_temp
-      filters:
-        - lambda: return x - 4;
+      # filters:
+      #   - lambda: return x - 4;
       unit_of_measurement: °C
     humidity:
       id: dvor_hum
@@ -147,15 +164,7 @@ sensor:
       unit_of_measurement: '%'
     update_interval: 5s
 
-  # # Сенсор времени ESPHOME
-  # - platform: template
-  #   name: "Current time"
-  #   lambda: |-
-  #     char str[17];
-  #     time_t currTime = id(ntp_time).now().timestamp;
-  #     strftime(str, sizeof(str), "%Y-%m-%d %X", localtime(&currTime));
-  #     return  { str };
-  #   update_interval: 60s
+
 
 # ======================== Ночники ===========================================
 output:
@@ -169,14 +178,240 @@ output:
     frequency: 1000 Hz
     id: pwm_output2
 
+  - id: fan_output
+    platform: gpio
+    pin:
+      number: GPIO2
+      inverted: false
+      mode:
+        output: true
+
+  - id: light_output
+    platform: gpio
+    pin:
+      number: GPIO0
+      inverted: false
+      mode:
+        output: true
+
+  - id: light_output1
+    platform: gpio
+    pin:
+      number: GPIO4
+      inverted: false
+      mode:
+        output: true
+
+
 light:
   - platform: monochromatic
     output: pwm_output1
-    name: "Night Light"
+    name: "Ночник в прихожей"
+    id: nochnik_prichozka
+    icon: mdi:lightbulb-night
     restore_mode: RESTORE_DEFAULT_OFF 
 
   - platform: monochromatic
     output: pwm_output2
-    name: "Night Light2"
+    id: nochnik_holl
+    icon: mdi:lightbulb-night
+    name: "Ночник в холле1"
     restore_mode: RESTORE_DEFAULT_OFF
+
+  - platform: binary
+    name: Свет двор(прав)
+    id: dvor_right_lamp
+    output: light_output
+    icon: mdi:light-flood-down
+    restore_mode: ALWAYS_OFF
+
+  - platform: binary
+    name: Свет двор(лев)
+    id: dvor_left_lamp
+    output: light_output1
+    icon: mdi:light-flood-down
+    restore_mode: ALWAYS_OFF
 # ================================================================================
+# ============ Сенсор включения света во дворе по UDP ============================
+binary_sensor:
+  - platform: udp
+    provider: switch-prihozka
+    id: dvor_light_udp
+    remote_id: binary_switch_1
+    internal: true
+    on_multi_click:
+      # triple click (свет во дворе)
+      - timing:
+          - ON for at most 0.5s
+          - OFF for at most 0.5s
+          - ON for at most 0.5s
+          - OFF for at most 0.5s
+          - ON for at most 0.5s
+          - OFF for at least 0.5s
+        then:
+          - light.toggle: dvor_right_lamp
+          - light.toggle: dvor_left_lamp
+      # quad click  (вентиляция)
+      - timing:
+          - ON for at most 0.5s
+          - OFF for at most 0.5s
+          - ON for at most 0.5s
+          - OFF for at most 0.5s
+          - ON for at most 0.5s
+          - OFF for at most 0.5s
+          - ON for at most 0.5s
+          - OFF for at least 0.2s
+        then:
+          - fan.toggle: relay_fan_prihozka
+# =================================================================================
+
+interval:
+  # Автоматическое управление реле вентилятора по интервалам
+  - interval: 1min  # Проверяем расписание каждую минуту
+    then:
+      - lambda: |-
+          if (!id(auto_fantimer).state) {
+            // Автоматический режим выключен, не делаем ничего
+            return;
+          }
+
+          auto now = id(ntp_time).now();
+          if (!now.is_valid()) return;
+
+          bool should_run = false;
+
+          // Функция для проверки одного интервала
+          auto check_interval = [&](int start, int end) -> bool {
+            if (start <= end) {
+              return now.hour >= start && now.hour < end;
+            } else {
+              return now.hour >= start || now.hour < end;  // Интервал пересекает полночь
+            }
+          };
+
+          // Проверка всех 5 интервалов
+          should_run = check_interval((int)id(start_hour_1).state, (int)id(end_hour_1).state) ||
+                       check_interval((int)id(start_hour_2).state, (int)id(end_hour_2).state) ||
+                       check_interval((int)id(start_hour_3).state, (int)id(end_hour_3).state) ||
+                       check_interval((int)id(start_hour_4).state, (int)id(end_hour_4).state) ||
+                       check_interval((int)id(start_hour_5).state, (int)id(end_hour_5).state);
+
+          // Управляем реле в зависимости от результата
+          if (should_run) {
+            id(relay_fan_prihozka).turn_on();
+          } else {
+            id(relay_fan_prihozka).turn_off();
+          }
+
+  # ==================  Пять временных интевалов работы вентиляции ===========================
+number:
+  - platform: template
+    name: "Интервал 1: Начало (часы)"
+    icon: mdi:timer-sand
+    id: start_hour_1
+    min_value: 0
+    max_value: 23
+    step: 1
+    optimistic: true
+    restore_value: true
+    mode: box
+
+  - platform: template
+    name: "Интервал 1: Конец (часы)"
+    icon: mdi:timer-sand-complete
+    id: end_hour_1
+    min_value: 0
+    max_value: 23
+    step: 1
+    optimistic: true
+    restore_value: true
+    mode: box
+
+  - platform: template
+    name: "Интервал 2: Начало (часы)"
+    icon: mdi:timer-sand
+    id: start_hour_2
+    min_value: 0
+    max_value: 23
+    step: 1
+    optimistic: true
+    restore_value: true
+    mode: box
+
+  - platform: template
+    name: "Интервал 2: Конец (часы)"
+    icon: mdi:timer-sand-complete
+    id: end_hour_2
+    min_value: 0
+    max_value: 23
+    step: 1
+    optimistic: true
+    restore_value: true
+    mode: box
+
+  - platform: template
+    name: "Интервал 3: Начало (часы)"
+    icon: mdi:timer-sand
+    id: start_hour_3
+    min_value: 0
+    max_value: 23
+    step: 1
+    optimistic: true
+    restore_value: true
+    mode: box
+
+  - platform: template
+    name: "Интервал 3: Конец (часы)"
+    icon: mdi:timer-sand-complete
+    id: end_hour_3
+    min_value: 0
+    max_value: 23
+    step: 1
+    optimistic: true
+    restore_value: true
+    mode: box
+
+  - platform: template
+    name: "Интервал 4: Начало (часы)"
+    icon: mdi:timer-sand
+    id: start_hour_4
+    min_value: 0
+    max_value: 23
+    step: 1
+    optimistic: true
+    restore_value: true
+    mode: box
+
+  - platform: template
+    name: "Интервал 4: Конец (часы)"
+    icon: mdi:timer-sand-complete
+    id: end_hour_4
+    min_value: 0
+    max_value: 23
+    step: 1
+    optimistic: true
+    restore_value: true
+    mode: box
+
+  - platform: template
+    name: "Интервал 5: Начало (часы)"
+    icon: mdi:timer-sand
+    id: start_hour_5
+    min_value: 0
+    max_value: 23
+    step: 1
+    optimistic: true
+    restore_value: true
+    mode: box
+
+  - platform: template
+    name: "Интервал 5: Конец (часы)"
+    icon: mdi:timer-sand-complete
+    id: end_hour_5
+    min_value: 0
+    max_value: 23
+    step: 1
+    optimistic: true
+    restore_value: true
+    mode: box
+  # =============================================================================================

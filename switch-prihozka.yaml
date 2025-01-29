@@ -1,0 +1,255 @@
+esphome:
+  name: switch-prihozka
+  friendly_name: switch-prihozka
+
+esp8266:
+  board: d1_mini
+  restore_from_flash: true
+
+logger:
+
+api:
+  reboot_timeout: 0s
+  encryption:
+    key: "x3CRC96sDNSAUUCrCYm/qz2gvVJJ/RKmtD/Wq1g8hXQ="
+
+ota:
+  - platform: esphome
+    password: "f4052abea6ea206d17a1cb68fbb73c04"
+
+wifi:
+  networks:
+    - ssid: !secret wifi_ssid
+      password: !secret wifi_password
+    - ssid: Keenetic-Home
+      password: "9994554500"
+
+  ap:
+    ssid: "Switch-Prihozka Fallback Hotspot"
+    password: "pnqeILCgMjbn"
+
+captive_portal:
+
+udp:
+  binary_sensors:
+    - binary_switch_1
+
+web_server:
+  port: 80
+  version: 2
+
+# ================= TIME ====================================
+time:
+  - platform: sntp
+    id: ntp_time
+    timezone: Asia/Omsk
+    servers:
+      - 0.openwrt.pool.ntp.org
+      - 1.openwrt.pool.ntp.org
+      - 2.openwrt.pool.ntp.org
+
+# ===============================================================
+button:
+  - platform: restart
+    name: Restart 
+
+text_sensor:
+  - platform: wifi_info
+    ip_address:
+      name: IP Address
+    ssid:
+      name: SSID
+
+  # Сенсор времени ESPHOME
+  - platform: template
+    name: Локальное время
+    lambda: |-
+      char str[17];
+      time_t currTime = id(ntp_time).now().timestamp;
+      strftime(str, sizeof(str), "%Y-%m-%d %H:%M", localtime(&currTime));
+      return  { str };
+    update_interval: 60s  
+# =======================================================================
+# ============== Init DS18B20 (датчики температуры) ====================
+one_wire:
+  - platform: gpio
+    pin: GPIO4
+
+sensor:
+  # DS18B20
+  - platform: dallas_temp
+    address: 0xedf6bbbd0164ff28
+    name: Температура в прихожей
+    id: sensor_prihozka_temp
+    update_interval: 1s
+    unit_of_measurement: "°C"
+    icon: mdi:thermometer
+    device_class: "temperature"
+    state_class: "measurement"
+    accuracy_decimals: 1
+# ================== Init relay =========================================
+output:
+  - id: light_output0
+    platform: gpio
+    pin:
+      number: GPIO12
+      inverted: true
+      mode:
+        output: true
+
+  - id: light_output1
+    platform: gpio
+    pin:
+      number: GPIO13
+      inverted: true
+      mode:
+        output: true
+
+  - id: light_output2
+    platform: gpio
+    pin:
+      number: GPIO14
+      inverted: true
+      mode:
+        output: true
+
+  - id: light_output3
+    platform: gpio
+    pin:
+      number: GPIO16
+      inverted: true
+      mode:
+        output: true
+
+# =============== Led light ==========================================
+  - id: light_output4
+    platform: gpio
+    pin:
+      number: GPIO5
+      inverted: false
+      mode:
+        output: true
+
+# ================= Light ====================================
+light:
+  - platform: binary
+    name: Свет прихожка(прав)
+    id: prih_right_lamp
+    output: light_output3
+    icon: mdi:ceiling-light-outline
+    restore_mode: ALWAYS_OFF
+
+  - platform: binary
+    name: Свет прихожка(лев)
+    id: prih_left_lamp
+    output: light_output1
+    icon: mdi:ceiling-light-outline
+    restore_mode: ALWAYS_OFF
+
+  - platform: binary
+    name: Свет холл(прав)
+    id: holl_right_lamp
+    output: light_output2
+    icon: mdi:ceiling-light-outline
+    restore_mode: ALWAYS_OFF
+
+  - platform: binary
+    name: Свет холл(лев)
+    id: holl_left_lamp
+    output: light_output0
+    icon: mdi:ceiling-light-outline
+    restore_mode: ALWAYS_OFF
+
+# ============================= Led light =========================================
+  - platform: binary
+    id: led_light_lamp
+    output: light_output4
+    restore_mode: ALWAYS_ON
+    internal: True
+
+# ============================ Status led ==========================================
+  - platform: status_led
+    name: "Status led"
+    internal: True
+    pin:
+      number: GPIO15
+      inverted: false
+# ====================================================================================
+
+# ==================== Switch config =================================================
+binary_sensor:
+  - platform: gpio
+    id: binary_switch_1
+    pin:
+      number: GPIO0
+      inverted: true
+      mode: INPUT_PULLUP
+    on_multi_click:
+      # one click
+      - timing:
+        - ON for at most 0.5s
+        - OFF for at least 0.5s
+        then:
+          - light.turn_on: prih_right_lamp
+          - light.turn_off: led_light_lamp
+
+      # double click    
+      - timing:
+          - ON for at most 0.5s
+          - OFF for at most 0.5s
+          - ON for at most 0.5s
+          - OFF for at least 0.5s
+        then:
+          - light.turn_on: prih_left_lamp
+          - light.turn_off: led_light_lamp
+
+      # long press    
+      - timing:
+          - ON for at least 1.5s
+        then:
+          - light.turn_off: prih_right_lamp
+          - light.turn_off: prih_left_lamp
+          - light.turn_on: led_light_lamp
+
+
+      # # triple click               |     Задействован 
+      # - timing:                    |                 для
+      #     - ON for at most 0.5s    |                    включения   
+      #     - OFF for at most 0.5s   |                              света
+      #     - ON for at most 0.5s    |                                   во
+      #     - OFF for at most 0.5s   |                                       дворе.
+      #     - ON for at most 0.5s    |
+      #     - OFF for at least 0.2s  |
+      #   then:                      |
+
+  - platform: gpio
+    id: binary_switch_2
+    pin:
+      number: GPIO2
+      inverted: true
+      mode: INPUT_PULLUP
+    on_multi_click:
+      # one click
+      - timing:
+        - ON for at most 0.5s
+        - OFF for at least 0.5s
+        then:
+          - light.turn_on: holl_right_lamp
+
+      # double click    
+      - timing:
+          - ON for at most 0.5s
+          - OFF for at most 0.5s
+          - ON for at most 0.5s
+          - OFF for at least 0.5s
+        then:
+          - light.turn_on: holl_left_lamp
+          
+      # long press    
+      - timing:
+          - ON for at least 1.5s
+        then:
+          - light.turn_off: holl_right_lamp
+          - light.turn_off: holl_left_lamp
+# ====================================================================================
+

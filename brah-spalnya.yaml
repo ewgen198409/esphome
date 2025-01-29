@@ -22,9 +22,17 @@ ota:
   platform: esphome
   
 wifi:
-  ssid: !secret wifi_ssid
-  password: !secret wifi_password
-
+  networks:
+    - ssid: !secret wifi_ssid
+      password: !secret wifi_password
+    - ssid: Keenetic-Home
+      password: "9994554500"
+  use_address: brah-spalnya.local
+  # manual_ip:
+  #   static_ip: 192.168.1.126
+  #   gateway: 192.168.1.1
+  #   subnet: 255.255.255.0
+  #   dns1: 77.88.8.8
   # Enable fallback hotspot (captive portal) in case wifi connection fails
   ap:
     ssid: "Brah-Spalnya Fallback Hotspot"
@@ -52,9 +60,9 @@ binary_sensor:
     id: binary_switch_spalnya
     remote_id: binary_switch
     internal: true
-    on_click:
-      - min_length: 510ms
-        max_length: 5000ms
+    on_multi_click:
+      - timing:
+          - ON for at least 1.5s
         then:
           light.toggle: brah_spalnya_lamp
 
@@ -64,9 +72,10 @@ binary_sensor:
       number: P6
       inverted: false
       mode: INPUT_PULLUP
-    on_click:
-      - min_length: 10ms
-        max_length: 500ms
+    on_multi_click:
+      - timing:
+        - ON for at most 0.5s
+        - OFF for at least 0.5s
         then:
           - light.toggle: brah_spalnya_lamp
 
@@ -76,9 +85,10 @@ binary_sensor:
       number: P8
       inverted: false
       mode: INPUT_PULLUP
-    on_click:
-      - min_length: 10ms
-        max_length: 500ms
+    on_multi_click:
+      - timing:
+        - ON for at most 0.5s
+        - OFF for at least 0.5s
         then:
           - light.toggle: brah_spalnya_lamp
              

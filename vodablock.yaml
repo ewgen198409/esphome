@@ -27,6 +27,12 @@ esp32:
 preferences:
   flash_write_interval: 10s
 
+external_components:
+  - source: github://pr#7942
+    refresh: 30s
+    components:
+      - adc
+      
 logger:
 
 api:
@@ -48,11 +54,12 @@ wifi:
       password: "9994554500"
   # если отвалился wifi - перезагружать каждый час
   reboot_timeout: 60min
-  manual_ip:
-    static_ip: 192.168.1.164
-    gateway: 192.168.1.1
-    subnet: 255.255.255.0
-    dns1: 77.88.8.8
+  use_address: vodablock.local
+  # manual_ip:
+  #   static_ip: 192.168.1.164
+  #   gateway: 192.168.1.1
+  #   subnet: 255.255.255.0
+  #   dns1: 77.88.8.8
   on_connect:
     then:
       - rtttl.play: 'scale_up:d=32,o=5,b=100:c,c#,d#,e,f#,g#,a#,b'
@@ -98,7 +105,7 @@ text_sensor:
   - platform: homeassistant
     id: motion_sensor
     name: Сенсор движения в ванной
-    entity_id: binary_sensor.switch1
+    entity_id: binary_sensor.svet_vannaia_switch1
     on_value:
       then:
         - if:
@@ -381,13 +388,13 @@ sensor:
     device_class: ""
 
     # Общее время наработки вентилятора
-  - platform: duty_time
-    id: ventil_work_time
-    name: Вентилятор Время работы
-    icon: mdi:alarm-plus
-    update_interval: 1s
-#    restore: true
-    lambda: "return id(switch_ventil).state;"
+#   - platform: duty_time
+#     id: ventil_work_time
+#     name: Вентилятор Время работы
+#     icon: mdi:alarm-plus
+#     update_interval: 1s
+# #    restore: true
+#     lambda: "return id(switch_ventil).state;"
 
 # ================== init display ================================
 display:

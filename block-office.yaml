@@ -1,0 +1,377 @@
+esphome:
+  name: block-office
+  friendly_name: Block-office
+
+esp8266:
+  board: d1_mini
+  restore_from_flash: true
+  # framework:
+  #   version: 2.7.4
+
+logger:
+
+api:
+  encryption:
+    key: "jer1RLt6wpw9Q2ZnJaq54YHwiTj4vJ9CAsyeJ5U16Jw="
+
+ota:
+  - platform: esphome
+    password: "3a2b0c2cc547a398831e1f0a8119c649"
+
+wifi:
+  networks:
+    - ssid: !secret wifi_ssid
+      password: !secret wifi_password
+    - ssid: Keenetic-Home
+      password: "9994554500"
+
+  ap:
+    ssid: "Block-Office Fallback Hotspot"
+    password: "olFKLbjgUvHS"
+
+captive_portal:
+# ================= TIME ====================================
+time:
+  - platform: sntp
+    id: ntp_time
+    timezone: Asia/Omsk
+    servers:
+      - 0.openwrt.pool.ntp.org
+      - 1.openwrt.pool.ntp.org
+      - 2.openwrt.pool.ntp.org
+
+# ===============================================================
+button:
+  - platform: restart
+    name: Restart 
+
+text_sensor:
+  - platform: wifi_info
+    ip_address:
+      name: IP Address
+    ssid:
+      name: SSID
+
+  # Сенсор времени ESPHOME
+  - platform: template
+    name: Локальное время
+    lambda: |-
+      char str[17];
+      time_t currTime = id(ntp_time).now().timestamp;
+      strftime(str, sizeof(str), "%Y-%m-%d %H:%M", localtime(&currTime));
+      return  { str };
+    update_interval: 60s  
+# =======================================================================
+# ============== Init DS18B20 (датчики температуры) ====================
+one_wire:
+  - platform: gpio
+    pin: D5
+
+sensor:
+  # DS18B20
+  - platform: dallas_temp
+    address: 0x63d829190264ff28
+    name: Температура в офисе
+    id: sensor_office_temp
+    update_interval: 1s
+    unit_of_measurement: "°C"
+    icon: mdi:thermometer
+    device_class: "temperature"
+    state_class: "measurement"
+    accuracy_decimals: 1
+    filters:
+      - multiply: 0.98  # умножаем значение с датчика на это число для коррекции
+      - round: 1  # сокращаем до одного значения после запятой
+# =============================================================================
+# ============= sensor DOOR === Analog to Binary sensor ========================
+  - platform: adc
+    id: button_adc
+    pin: A0
+    update_interval: .2s
+    # on_value_range:
+    #   - above: 0.5
+    #     then:
+    #     - binary_sensor.template.publish:
+    #         id: door_switch
+    #         state: OFF
+
+    #   - below: 0.5
+    #     then:
+    #     - binary_sensor.template.publish:
+    #         id: door_switch
+    #         state: ON
+# =============================================================================
+# ====================== surise or sunset sensors =============================
+sun:
+  latitude: 54.9293  # Укажите вашу широту
+  longitude: 73.2045 # Укажите вашу долготу
+  id: sun0
+# =============================================================================
+# ======================== Init relay =========================================
+output:
+  - id: light_output0
+    platform: gpio
+    pin:
+      number: D6
+      inverted: true
+      mode:
+        output: true
+
+  - id: light_output1
+    platform: gpio
+    pin:
+      number: D7
+      inverted: true
+      mode:
+        output: true
+# ===============================================================================
+# ========================== Led light ==========================================
+  - id: light_output4
+    platform: gpio
+    pin:
+      number: D0
+      inverted: false
+      mode:
+        output: true
+# ===============================================================================
+# ================================ Light ========================================
+light:
+  - platform: binary
+    name: Свет офис(прав)
+    id: office_right_lamp
+    output: light_output0
+    icon: mdi:ceiling-light-outline
+    restore_mode: ALWAYS_OFF
+    on_turn_off:
+      then:
+        if: 
+          condition:
+            - light.is_off: office_left_lamp
+          then:
+            - light.turn_on: led_button
+    on_turn_on:
+      then:
+        - light.turn_off: led_button
+
+  - platform: binary
+    name: Свет офис(лев)
+    id: office_left_lamp
+    output: light_output1
+    icon: mdi:ceiling-light-outline
+    restore_mode: ALWAYS_OFF
+    on_turn_off:
+      then:
+        if: 
+          condition:
+            - light.is_off: office_right_lamp
+          then:
+            - light.turn_on: led_button
+
+    on_turn_on:
+      then:
+        light.turn_off: led_button
+# ===================================================================================
+# ============================= Led Button ==========================================
+  - platform: binary
+    id: led_button
+    output: light_output4
+    restore_mode: RESTORE_DEFAULT_ON
+    internal: True
+# ====================================================================================
+# ======================== Led ws2812b Button panel ===================================
+  - platform: neopixelbus
+    id: led_button_panel
+    name: "ws2812 led panel"
+    restore_mode: ALWAYS_OFF
+    variant: WS2812x
+    pin: D8
+    num_leds: 4
+    type: GRB
+    effects:
+      # Use default parameters:
+      - addressable_rainbow:
+          name: "rainbow"
+      - addressable_scan:
+          name: "scan"
+      - addressable_twinkle:
+          name: "twinkle"
+      - addressable_random_twinkle:
+          name: "random twinkle"
+      - addressable_fireworks:
+          name: "fireworks"
+      - addressable_flicker:
+          name: "flicker"
+      - addressable_color_wipe:
+          name: "color wipe"
+# =============================================================================
+# ======================== Led ws2812b Door ===================================
+  - platform: neopixelbus
+    id: led_door
+    name: "ws2812 led door"
+    restore_mode: ALWAYS_OFF
+    variant: WS2812x
+    pin: D4
+    num_leds: 10
+    type: GRB
+    effects:
+      # Use default parameters:
+      - addressable_rainbow:
+          name: "rainbow"
+      - addressable_scan:
+          name: "scan"
+      - addressable_twinkle:
+          name: "twinkle"
+      - addressable_random_twinkle:
+          name: "random twinkle"
+      - addressable_fireworks:
+          name: "fireworks"
+      - addressable_flicker:
+          name: "flicker"
+      - addressable_color_wipe:
+          name: "color wipe"
+# ====================================================================================
+# ==================== Button config =================================================
+binary_sensor:
+  - platform: gpio
+    id: binary_switch_1
+    pin:
+      number: D1
+      inverted: False
+    on_state:
+      then:
+        - lambda: |-
+            id(led_button_panel).turn_on().set_brightness(1.0).set_rgb(0, 1.0, 0).set_effect("scan").perform();
+        - delay: 2s
+        - lambda: |-
+            id(led_button_panel).turn_off().perform();
+
+    on_multi_click:
+      # one click
+      - timing:
+        - ON for at most 0.5s
+        - OFF for at least 0.5s
+        then:
+          - light.turn_on: office_left_lamp
+
+      # long press    
+      - timing:
+          - ON for at least 1.5s
+        then:
+          - light.turn_off: office_left_lamp
+
+      # # double click    
+      # - timing:
+      #     - ON for at most 0.5s
+      #     - OFF for at most 0.5s
+      #     - ON for at most 0.5s
+      #     - OFF for at least 0.5s
+      #   then:
+
+      # # triple click
+      # - timing:
+      #     - ON for at most 0.5s
+      #     - OFF for at most 0.5s
+      #     - ON for at most 0.5s
+      #     - OFF for at most 0.5s
+      #     - ON for at most 0.5s
+      #     - OFF for at least 0.2s
+      #   then: 
+
+
+
+  - platform: gpio
+    id: binary_switch_2
+    pin:
+      number: D2
+      inverted: false
+    on_state:
+      then:
+        - lambda: |-
+            id(led_button_panel).turn_on().set_brightness(1.0).set_rgb(0, 1.0, 0).set_effect("scan").perform();
+        - delay: 2s
+        - lambda: |-
+            id(led_button_panel).turn_off().perform();
+
+    on_multi_click:
+      - timing:
+        - ON for at most 0.5s
+        - OFF for at least 0.5s
+        then:
+          - light.turn_on: office_right_lamp
+
+      # long press    
+      - timing:
+          - ON for at least 1.5s
+        then:
+          - light.turn_off: office_right_lamp
+
+      # # double click    
+      # - timing:
+      #     - ON for at most 0.5s
+      #     - OFF for at most 0.5s
+      #     - ON for at most 0.5s
+      #     - OFF for at least 0.5s
+      #   then:
+
+      # # triple click
+      # - timing:
+      #     - ON for at most 0.5s
+      #     - OFF for at most 0.5s
+      #     - ON for at most 0.5s
+      #     - OFF for at most 0.5s
+      #     - ON for at most 0.5s
+      #     - OFF for at least 0.2s
+      #   then: 
+
+
+# ==============================================================================================
+# ======================== Sensor DOOR ==========================================================
+  - platform: template
+    name: "Door Switch"
+    id: door_switch
+    device_class: door
+    lambda: |-
+      if (id(button_adc).state > 0.5) {
+        // Door is open.
+        return false;
+      } else {
+        // Door is closed.
+        return true;
+      }
+# ================================================================================================
+# ======================== Control led panel =====================================================
+interval:
+  - interval: 1min
+    then:
+      - lambda: |-
+          if (!id(sun0).is_above_horizon()) {
+            id(led_button_panel).turn_on()
+              .set_brightness(1.0)
+              .set_rgb(0, 1.0, 0)
+              .set_effect(id(led_effect_select).state.c_str())
+              .perform();
+          } else {
+            id(led_button_panel).turn_off().perform();
+          }
+# ==================================================================================================
+# ======================= Компонент select для выбора эффекта ночника на панели кнопок ==============
+select:
+  - platform: template
+    name: "LED Effect"
+    id: led_effect_select
+    options:
+      - "rainbow"
+      - "scan"
+      - "twinkle"
+      - "random twinkle"
+      - "fireworks"
+      - "flicker"
+      - "color wipe"
+    initial_option: "rainbow"
+    restore_value: true
+    set_action:
+      then:
+        - light.control:
+            id: led_button_panel
+            effect: !lambda 'return x.c_str();'
+# ========================================================================================================

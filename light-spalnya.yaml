@@ -23,9 +23,17 @@ ota:
   password: "1ed8692bea4dd2b457b73501f671d338"
 
 wifi:
-  ssid: !secret wifi_ssid
-  password: !secret wifi_password
-  ap:
+  networks:
+    - ssid: !secret wifi_ssid
+      password: !secret wifi_password
+    - ssid: Keenetic-Home
+      password: "9994554500"
+  use_address: light-spalnya.local
+  # manual_ip:
+  #   static_ip: 192.168.1.109
+  #   gateway: 192.168.1.1
+  #   subnet: 255.255.255.0
+  #   dns1: 77.88.8.8
 # Отправляем в сеть свой бинарный сенсор (binary_switch)
 udp:
   binary_sensors:
@@ -49,9 +57,9 @@ binary_sensor:
     id: binary_switch_bra_1
     remote_id: binary_switch_1
     internal: true
-    on_click:
-      - min_length: 510ms
-        max_length: 5000ms
+    on_multi_click:
+      - timing:
+          - ON for at least 1.5s
         then:
           light.toggle: spalnya_lamp
 
@@ -60,9 +68,9 @@ binary_sensor:
     id: binary_switch_bra_2
     remote_id: binary_switch_2
     internal: true
-    on_click:
-      - min_length: 510ms
-        max_length: 5000ms
+    on_multi_click:
+      - timing:
+          - ON for at least 1.5s
         then:
           light.toggle: spalnya_lamp
 
@@ -72,9 +80,10 @@ binary_sensor:
       number: P6
       inverted: true
       mode: INPUT_PULLUP
-    on_click:
-      - min_length: 10ms
-        max_length: 500ms
+    on_multi_click:
+      - timing:
+        - ON for at most 0.5s
+        - OFF for at least 0.5s
         then:
           - light.toggle: spalnya_lamp
           - if:

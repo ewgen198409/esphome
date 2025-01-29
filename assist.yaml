@@ -84,13 +84,13 @@ voice_assistant:
               data:
                 media_content_id: !lambda 'return x;'
                 media_content_type: audio/mpeg
-                entity_id: media_player.mpd_hass
+                entity_id: media_player.music_player_daemon
           - delay: 0.5s
           - homeassistant.service:
               service: media_player.volume_set
               data:
                 volume_level: !lambda 'return id(volume_level).state / 100;'
-                entity_id: media_player.mpd_hass
+                entity_id: media_player.music_player_daemon
 
   on_listening:
     - rtttl.play: "Cat:d=16,o=6,b=95:32d,32d#,32d,32d#"
@@ -150,7 +150,7 @@ number:
             service: media_player.volume_set
             data:
               volume_level: !lambda 'return x/100;'
-              entity_id: media_player.mpd_hass
+              entity_id: media_player.music_player_daemon
 
 switch:
   - platform: template
