@@ -1,56 +1,75 @@
-sensor:
-  - platform: rotary_encoder
-    id: encoder_rotary
-    name: "stehlampe Rotary"
-    pin_a:
-      number: GPIO32
-      mode:
-        input: true
-        pullup: true
-    pin_b:
-      number: GPIO33
-      mode:
-        input: true
-        pullup: true
-    internal: true
-    filters:
-      debounce: 30ms
-    on_clockwise:
-      - lambda: id(back_to_screensaver).execute();
-      - if:
-          condition:
-            - lambda: |-
-                  return id(back_light).current_values.get_brightness() <= ${backlight} + 0.05;
-          then:
-            - lvgl.widget.show: status_bar
-            - lvgl.page.show: page_one
-            - delay: 0.5s
-            - lvgl.slider.update:
-                id: slider_light
-                value: !lambda return id(set_brghtness);
-            - script.execute: back_to_screensaver
+# sensor:
+  # - platform: rotary_encoder
+  #   id: encoder_rotary
+  #   name: "stehlampe Rotary"
+  #   pin_a:
+  #     number: GPIO17
+  #     mode:
+  #       input: true
+  #       pullup: true
+  #   pin_b:
+  #     number: GPIO16
+  #     mode:
+  #       input: true
+  #       pullup: true
+  #   internal: true
+  #   filters:
+  #     debounce: 30ms
+  #   on_clockwise:
+  #     - lambda: id(back_to_screensaver).execute();
+  #     - if:
+  #         condition:
+  #           - lambda: |-
+  #                 return id(back_light).current_values.get_brightness() <= ${backlight} + 0.05;
+  #         then:
+  #           - lvgl.widget.show: status_bar
+  #           - lvgl.page.show: page_one
+  #           - delay: 0.5s
+  #           - lvgl.slider.update:
+  #               id: slider_light
+  #               value: !lambda return id(set_brghtness);
+  #           - script.execute: back_to_screensaver
 
-    on_anticlockwise:
-      - lambda: id(back_to_screensaver).execute();
-      - if:
-          condition:
-            - lambda: |-
-                  return id(back_light).current_values.get_brightness() <= ${backlight} + 0.05;
-          then:
-            - lvgl.widget.show: status_bar
-            - lvgl.page.show: page_one
-            - delay: 0.5s
-            - lvgl.slider.update:
-                id: slider_light
-                value: !lambda return id(set_brghtness);
-            - script.execute: back_to_screensaver
+  #   on_anticlockwise:
+  #     - lambda: id(back_to_screensaver).execute();
+  #     - if:
+  #         condition:
+  #           - lambda: |-
+  #                 return id(back_light).current_values.get_brightness() <= ${backlight} + 0.05;
+  #         then:
+  #           - lvgl.widget.show: status_bar
+  #           - lvgl.page.show: page_one
+  #           - delay: 0.5s
+  #           - lvgl.slider.update:
+  #               id: slider_light
+  #               value: !lambda return id(set_brghtness);
+  #           - script.execute: back_to_screensaver
               
   # - platform: udp
   #   provider: co2-sensor-garage
   #   remote_id: garage_temp
   #   id: garage_temp
   #   internal: true
+  # sensor button ============================================================
+# Датчик напряжения с GPIO32
+sensor:
+  - platform: adc
+    pin: GPIO32
+    name: "ADC Button Sensor"
+    id: adc_sensor
+    update_interval: 50ms
+    attenuation: 12db
+    internal: true
+    filters:
+      - multiply: 3.3
 
+  - platform: adc
+    id: source_sensor
+    name: ADC NTC
+    pin: GPIO33
+    attenuation: auto
+    update_interval: 5s
+    internal: true
 
   - platform: ntc
     sensor: resistance_sensor
@@ -85,12 +104,6 @@ sensor:
     reference_voltage: 3.3v
     name: Resistance Sensor
 
-  - platform: adc
-    id: source_sensor
-    name: ADC NTC
-    pin: GPIO35
-    attenuation: auto
-    update_interval: 5s
 
   - platform: wifi_signal
     name: WiFi Thermostat
@@ -106,28 +119,28 @@ sensor:
     entity_category: "diagnostic"
     device_class: ""
 
-  # "Sonoff THS01 - SI7021"
-  - platform: htu21d
-    model: SI7021
-    temperature:
-      name: "SI7021 Temperature"
-      id: sens_temp
-      on_value:
-        - lvgl.label.update:
-            id: lbl_temp1
-            text:
-              format: "\U000F050F: %.1f°"
-              args: [ 'id(sens_temp).state' ]
-    humidity:
-      name: "SI7021 Humidity"
-      id: sens_humi
-      on_value:
-        - lvgl.label.update:
-            id: lbl_hum1
-            text:
-              format: "\U000F0E0A: %.0f%%"
-              args: [ 'id(sens_humi).state' ]
-    update_interval: 5s
+  # # "Sonoff THS01 - SI7021"
+  # - platform: htu21d
+  #   model: SI7021
+  #   temperature:
+  #     name: "SI7021 Temperature"
+  #     id: sens_temp
+  #     on_value:
+  #       - lvgl.label.update:
+  #           id: lbl_temp1
+  #           text:
+  #             format: "\U000F050F: %.1f°"
+  #             args: [ 'id(sens_temp).state' ]
+  #   humidity:
+  #     name: "SI7021 Humidity"
+  #     id: sens_humi
+  #     on_value:
+  #       - lvgl.label.update:
+  #           id: lbl_hum1
+  #           text:
+  #             format: "\U000F0E0A: %.0f%%"
+  #             args: [ 'id(sens_humi).state' ]
+  #   update_interval: 5s
 
   # Сенсоры погоды получены из HA
   - platform: homeassistant
@@ -195,18 +208,79 @@ sensor:
    # ===========================================================================
 
 
-binary_sensor: # Button encoder
-  - platform: gpio
-    pin:
-      number: GPIO25
-      mode: INPUT_PULLUP
-      inverted: true
-    id: enc_switch
-    name: "Encoder button"
-    internal: true
+# Бинарные сенсоры для кнопок
+binary_sensor:
+  - platform: template
+    id: left_button
+    name: "Button DOWN"
+    lambda: |-
+      return id(adc_sensor).state > 5.1 && id(adc_sensor).state < 5.9;
     filters:
-      - delayed_off: 50ms
-      - delayed_on: 50ms
+      - delayed_on: 10ms
+      - delayed_off: 10ms
+    on_click:
+      - lambda: id(back_to_screensaver).execute();
+      - if:
+          condition:
+            - lambda: |-
+                  return id(back_light).current_values.get_brightness() <= ${backlight} + 0.05;
+          then:
+            - lvgl.widget.show: status_bar
+            - lvgl.page.show: page_one
+            - delay: 0.5s
+            - lvgl.slider.update:
+                id: slider_light
+                value: !lambda return id(set_brghtness);
+            - script.execute: back_to_screensaver
+
+  - platform: template
+    name: "Button UP"
+    id: right_button
+    lambda: |-
+      return id(adc_sensor).state > 7.1 && id(adc_sensor).state < 7.6;
+    filters:
+      - delayed_on: 10ms
+      - delayed_off: 10ms
+    on_click:
+      - lambda: id(back_to_screensaver).execute();
+      - if:
+          condition:
+            - lambda: |-
+                  return id(back_light).current_values.get_brightness() <= ${backlight} + 0.05;
+          then:
+            - lvgl.widget.show: status_bar
+            - lvgl.page.show: page_one
+            - delay: 0.5s
+            - lvgl.slider.update:
+                id: slider_light
+                value: !lambda return id(set_brghtness);
+            - script.execute: back_to_screensaver
+
+
+  - platform: template
+    name: "Button ENTER"
+    id: enter_button
+    lambda: |-
+      return id(adc_sensor).state > 9.0 && id(adc_sensor).state < 9.5;
+    filters:
+      - delayed_on: 10ms
+      - delayed_off: 10ms
+    on_click:
+      - lambda: id(back_to_screensaver).execute();
+      - if:
+          condition:
+            - lambda: |-
+                  return id(back_light).current_values.get_brightness() <= ${backlight} + 0.05;
+          then:
+            - lvgl.widget.show: status_bar
+            - lvgl.page.show: page_one
+            - delay: 0.5s
+            - lvgl.slider.update:
+                id: slider_light
+                value: !lambda return id(set_brghtness);
+            - script.execute: back_to_screensaver
+
+# ==============================================================================
 
   - platform: status
     name: "Thermostat Status"

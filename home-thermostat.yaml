@@ -1,0 +1,203 @@
+esphome:
+  name: home-thermostat
+  friendly_name: home-thermostat
+
+esp32:
+  board: lolin32_lite
+  framework:
+    type: esp-idf
+    
+logger:
+
+api:
+  encryption:
+    key: "hz7wz2DN+MedfQQw4kCZDnxYyQwdP6sVfHhrVzTK8Vs="
+
+ota:
+  - platform: esphome
+    password: "3022eb295d8867a45620d4457b30fef0"
+
+wifi:
+  networks:
+    - ssid: OpenWrt
+      password: "9514210798"
+    - ssid: Keenetic-Home
+      password: "9994554500"
+
+  ap:
+    ssid: "Home-Thermostat Fallback Hotspot"
+    password: "jboTzY52UKkQ"
+
+captive_portal:
+
+button:
+  - platform: restart
+    name: Restart
+
+time:
+  - platform: sntp
+    id: ntp_time
+    timezone: UTC-06:00
+    servers:
+      - 0.openwrt.pool.ntp.org
+      - 1.openwrt.pool.ntp.org
+      - 2.openwrt.pool.ntp.org
+
+text_sensor:
+  - platform: wifi_info
+    ip_address:
+      name: IP Address
+    ssid:
+      name: SSID
+
+  # Сенсор времени ESPHOME
+  - platform: template
+    name: "Current time"
+    lambda: |-
+      char str[17];
+      time_t currTime = id(ntp_time).now().timestamp;
+      strftime(str, sizeof(str), "%Y-%m-%d %X", localtime(&currTime));
+      return  { str };
+    update_interval: 60s
+
+
+  # sensor button ============================================================
+# Датчик напряжения с GPIO32
+sensor:
+  - platform: adc
+    pin: 32
+    name: "ADC Button Sensor"
+    id: adc_sensor
+    update_interval: 50ms
+    attenuation: 12db
+    internal: true
+    filters:
+      - multiply: 3.3
+
+  # sensor themperature =======================================================
+  - platform: resistance
+    id: resistance_sensor
+    sensor: source_sensor
+    configuration: UPSTREAM
+    resistor: 10kOhm
+    reference_voltage: 3.3v
+    name: Resistance Sensor
+    internal: true
+
+  - platform: adc
+    id: source_sensor
+    name: ADC NTC
+    pin: GPIO33
+    attenuation: auto
+    update_interval: 5s
+    internal: true
+
+  - platform: ntc
+    sensor: resistance_sensor
+    id: ntc_temp
+    calibration:
+      b_constant: 3950
+      reference_temperature: 25°C
+      reference_resistance: 30kOhm
+    name: NTC Temperature
+    unit_of_measurement: "°C"
+    device_class: "temperature"
+    state_class: "measurement"
+    accuracy_decimals: 1
+# ==============================================================================
+
+
+
+
+
+
+# Бинарные сенсоры для кнопок
+binary_sensor:
+  - platform: template
+    name: "Button DOWN"
+    lambda: |-
+      return id(adc_sensor).state > 5.1 && id(adc_sensor).state < 5.9;
+    filters:
+      - delayed_on: 10ms
+      - delayed_off: 10ms
+
+  - platform: template
+    name: "Button UP"
+    lambda: |-
+      return id(adc_sensor).state > 7.1 && id(adc_sensor).state < 7.6;
+    filters:
+      - delayed_on: 10ms
+      - delayed_off: 10ms
+
+  - platform: template
+    name: "Button ENTER"
+    lambda: |-
+      return id(adc_sensor).state > 9.0 && id(adc_sensor).state < 9.5;
+    filters:
+      - delayed_on: 10ms
+      - delayed_off: 10ms
+# ==============================================================================
+
+
+
+switch:
+  # реле термостата
+  - platform: gpio
+    id: switch_therm
+    name: Relay Thermostat
+    pin: GPIO25
+
+# ===================================================================================
+
+# Display
+spi:
+  clk_pin: GPIO18
+  mosi_pin: GPIO23
+
+display:
+  - platform: ili9xxx
+    id: display1
+    model: st7735
+    dc_pin: GPIO4
+    cs_pin: GPIO15
+    reset_pin: GPIO5
+    invert_colors: false
+    auto_clear_enabled: true
+    update_interval: 500ms
+    rotation: 180°
+    # dimensions:
+    #   height: 128
+    #   width: 160
+    lambda: |-
+      it.print(10, 10, id(tahoma_16), "Hello World!");
+            static int i = 0;
+      i++;
+      if ((i % 2) == 0)
+        it.strftime(5, 40, id(tahoma_clock), "%H:%M:%S", id(ntp_time).now());
+      else
+        it.strftime(5, 40, id(tahoma_clock), "%H:%M:%S", id(ntp_time).now());
+# =========================================================================================
+
+font:
+  - file: "fonts/tahomabd.ttf"
+    id: tahoma_16
+    size: 16
+  - file: "fonts/DS-DIGIB.ttf"
+    id: tahoma_clock
+    size: 34
+
+# ====================================================================================
+output:
+  # выход подсветки дисплея
+  - platform: ledc
+    pin: GPIO13
+    id: backlight_pwm
+
+light:
+  # LCD Backlight
+  - platform: monochromatic
+    output: backlight_pwm
+    name: "Display Backlight"
+    id: back_light
+    restore_mode: RESTORE_DEFAULT_ON
+# =====================================================================================

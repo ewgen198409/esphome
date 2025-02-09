@@ -9,20 +9,31 @@ substitutions:
 esphome:
   name: home-thermostat
   on_boot:
+    - lambda: id(back_light).turn_on().set_brightness(1).perform(); // включаем подсветку на 100%
     - delay: 7s   # ждем 
     - lvgl.widget.hide: boot_screen   # закрываем экран загрузки
+    - delay: 5s   # ждем
     - lambda: |-  
         id(thermostat_house).set_heat_deadband(id(heat_deadband) / 10);  // восстанавливаем значение гистерезиса термостата
         id(thermostat_house).set_heat_overrun(id(heat_overrun) / 10);  // восстанавливаем значение гистерезиса термостата
     - lambda: id(back_to_screensaver).execute();    // запускаем скрипт перехода на заставку
-    - lvgl.slider.update:   # устанавливаем значение яркости из global
-        id: slider_light
-        value: !lambda return id(set_brghtness);
+    - lvgl.arc.update:
+        id: arc_therm
+        value: !lambda return id(thermostat_house).target_temperature;
+    - lvgl.spinbox.update:
+        id: gist_down
+        value: !lambda return id(heat_deadband);
+    - lvgl.spinbox.update:
+        id: gist_up
+        value: !lambda return id(heat_overrun);
 
 esp32:
-  board: esp32dev
+  board: lolin32_lite
   framework:
     type: esp-idf
+
+preferences:
+  flash_write_interval: 10s
 
 logger:
 
@@ -35,7 +46,7 @@ font: !include font\font.yaml
 
 api:
   encryption:
-    key: "qsQmKLMvLh9REAS68i5MFrn5GKYXswAaDVRsCVhWNfw="
+    key: "hz7wz2DN+MedfQQw4kCZDnxYyQwdP6sVfHhrVzTK8Vs="
   on_client_connected:
     - if:
         condition:
@@ -51,7 +62,7 @@ api:
           
 ota:
   - platform: esphome
-    password: ""
+    password: "3022eb295d8867a45620d4457b30fef0"
 
 wifi:
   networks:
@@ -71,22 +82,17 @@ wifi:
 udp:
 captive_portal:
 
-# Датчик температуры si7021
-i2c:
-  sda: GPIO22
-  scl: GPIO23
-
 switch:
   # основное реле термостата
   - platform: gpio
     id: relay
     name: Relay 2
-    pin: GPIO15
+    pin: GPIO25
 
 output:
   # выход подсветки дисплея
   - platform: ledc
-    pin: GPIO2
+    pin: GPIO13
     id: backlight_pwm
 
 light:
@@ -97,6 +103,7 @@ light:
     restore_mode: RESTORE_DEFAULT_ON
     # on_state:
     #   then:
+    #     - delay: 1s
     #     - lvgl.slider.update:
     #         id: slider_light
     #         value: !lambda return (id(back_light).current_values.get_brightness() * 100);
@@ -188,16 +195,17 @@ globals:
   - id: heat_deadband
     type: float
     initial_value: "0.5"
-    restore_value: yes
+    restore_value: true
 
   # память гистерезиса
   - id: heat_overrun
     type: float
     initial_value: "0.5"
-    restore_value: yes
+    restore_value: true
 
   # память заданной основной яркости
   - id: set_brghtness
     type: float
     initial_value: "0.5"
-    restore_value: yes
+    restore_value: true
+

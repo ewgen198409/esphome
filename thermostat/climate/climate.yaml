@@ -45,6 +45,6 @@
                     if (mode == climate::CLIMATE_MODE_OFF) return 0;
                     return 1;
 
-      # - lvgl.arc.update:
-      #     id: arc_therm
-      #     value: !lambda return id(thermostat_house).target_temperature;
+      - lvgl.arc.update:
+          id: arc_therm
+          value: !lambda return id(thermostat_house).target_temperature;

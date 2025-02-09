@@ -1,8 +1,10 @@
 lvgl: 
   displays: display1
   encoders: 
-    sensor: encoder_rotary
-    enter_button: enc_switch
+    enter_button: enter_button
+    sensor:
+      right_button: right_button
+      left_button : left_button
   bg_color: black
   buffer_size: 25%
   default_font: montserrat_12
@@ -128,7 +130,7 @@ lvgl:
             value: !lambda return id(thermostat_house).target_temperature;
             min_value: 10.0
             max_value: 40.0
-            adjustable: true
+            adjustable: false
             width: 80%
             height: 80%
             align: CENTER
@@ -146,11 +148,11 @@ lvgl:
               pad_all: 3
               focused:
                 bg_color: red
-            on_value:
-              then:
-                - climate.control:
-                    id: thermostat_house
-                    target_temperature: !lambda return x;
+            # on_value:
+            #   then:
+            #     - climate.control:
+            #         id: thermostat_house
+            #         target_temperature: !lambda return x;
 
         # кнопка - термостата      
         - button:
@@ -395,7 +397,8 @@ lvgl:
             digits: 2
             decimal_places: 1
             # восстанавливаем значение при загрузке
-            value: !lambda 'return id(heat_deadband);'
+            value: !lambda |-
+                      return id(heat_deadband);  // Предполагаем, что heat_overrun сохранен в формате x10
             x: 80
             y: 63
             width: 45
@@ -403,8 +406,9 @@ lvgl:
             on_value:
               then:
                 - lambda: |-
+                    // float value = id(gist_down).state;
                     id(thermostat_house).set_heat_deadband(x);
-                    id(heat_deadband) = x * 10;  // сохранить в global чтобы восстановить при загрузке
+                    id(heat_deadband) = x * 10;  // Сохранить в global, чтобы восстановить при загрузке
 
         - label:
             text_font: tahoma_12
@@ -430,7 +434,8 @@ lvgl:
             digits: 2
             decimal_places: 1
             # восстанавливаем значение при загрузке
-            value: !lambda 'return id(heat_overrun);'
+            value: !lambda |-
+                      return id(heat_overrun);  // Предполагаем, что heat_overrun сохранен в формате x10
             x: 80
             y: 91
             width: 45
@@ -438,8 +443,9 @@ lvgl:
             on_value:
               then:
                 - lambda: |-
+                    // float value = id(gist_up).state;
                     id(thermostat_house).set_heat_overrun(x);
-                    id(heat_overrun) = x * 10;    // сохранить в global чтобы восстановить при загрузке
+                    id(heat_overrun) = x * 10;  // Сохранить в global, чтобы восстановить при загрузке
                     
         - label:
             text_font: tahoma_12
