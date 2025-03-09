@@ -87,7 +87,7 @@ sensor:
   - platform: adc
     id: button_adc
     pin: A0
-    update_interval: .2s
+    update_interval: 1s
     # on_value_range:
     #   - above: 0.5
     #     then:
@@ -211,7 +211,7 @@ light:
     restore_mode: ALWAYS_OFF
     variant: WS2812x
     pin: D4
-    num_leds: 10
+    num_leds: 42
     type: GRB
     effects:
       # Use default parameters:
@@ -229,6 +229,24 @@ light:
           name: "flicker"
       - addressable_color_wipe:
           name: "color wipe"
+      - addressable_color_wipe:
+          name: "Door Opening Effect"
+          colors:
+            - red: 0%
+              green: 100%
+              blue: 0%
+              num_leds: 1
+          add_led_interval: 50ms  # Интервал между включением светодиодов
+          reverse: false
+      - addressable_color_wipe:
+          name: "Door Closing Effect"
+          colors:
+            - red: 0%
+              green: 100%
+              blue: 0%
+              num_leds: 42
+          add_led_interval: 50ms  # Интервал между выключением светодиодов
+          reverse: true
 # ====================================================================================
 # ==================== Button config =================================================
 binary_sensor:
@@ -255,7 +273,7 @@ binary_sensor:
 
       # long press    
       - timing:
-          - ON for at least 1.5s
+          - ON for at least 1s
         then:
           - light.turn_off: office_left_lamp
 
@@ -301,7 +319,7 @@ binary_sensor:
 
       # long press    
       - timing:
-          - ON for at least 1.5s
+          - ON for at least 1s
         then:
           - light.turn_off: office_right_lamp
 
@@ -338,26 +356,57 @@ binary_sensor:
         // Door is closed.
         return true;
       }
+    # Эффект опирания - запирания двери
+    on_press:
+      then:
+        - light.turn_on:
+            id: led_door
+            effect: "Door Opening Effect"
+        - delay: 3s
+        - light.turn_off: led_door
+    on_release:
+      then:
+        - light.turn_on:
+            id: led_door
+            effect: "Door Closing Effect"
+        - delay: 3s
+        - light.turn_off: led_door
 # ================================================================================================
 # ======================== Control led panel =====================================================
 interval:
-  - interval: 1min
+  - interval: 30s
     then:
       - lambda: |-
-          if (!id(sun0).is_above_horizon()) {
-            id(led_button_panel).turn_on()
-              .set_brightness(1.0)
+          if (id(ntp_time).now().is_valid() && id(night_switch).state && !id(sun0).is_above_horizon()) {
+            if (!id(door_switch).state) {
+              // Дверь закрыта, включаем с эффектами
+              id(led_button_panel).turn_on()
+                .set_brightness(1.0)
+                .set_rgb(0, 1.0, 0)
+                .set_effect(id(led_effect_select).state.c_str())
+                .perform();
+            } else {
+              // Дверь открыта, включаем без эффектов
+              id(led_button_panel).turn_on()
+                .set_brightness(0.7)
+                .set_rgb(0, 1.0, 0)
+                .set_effect("None")  // Явно сбрасываем эффект
+                .perform();
+            }
+            id(led_door).turn_on()
+              .set_brightness(0.9)
               .set_rgb(0, 1.0, 0)
-              .set_effect(id(led_effect_select).state.c_str())
+              .set_effect("scan")
               .perform();
           } else {
             id(led_button_panel).turn_off().perform();
+            id(led_door).turn_off().perform();
           }
-# ==================================================================================================
+# ===================================================================================================
 # ======================= Компонент select для выбора эффекта ночника на панели кнопок ==============
 select:
   - platform: template
-    name: "LED Effect"
+    name: "LED Effect Panel"
     id: led_effect_select
     options:
       - "rainbow"
@@ -368,10 +417,20 @@ select:
       - "flicker"
       - "color wipe"
     initial_option: "rainbow"
+    optimistic: true
     restore_value: true
     set_action:
       then:
         - light.control:
             id: led_button_panel
             effect: !lambda 'return x.c_str();'
+# ========================================================================================================
+# =========================== Выключатель фукции ночника =================================================
+switch:
+  - platform: template
+    name: "Фукция ночника"
+    id: night_switch
+    icon: mdi:weather-night
+    optimistic: True
+    restore_mode: RESTORE_DEFAULT_ON
 # ========================================================================================================

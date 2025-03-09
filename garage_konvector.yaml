@@ -54,9 +54,10 @@ time:
               auto call = id(thermostat_garage_konvector).make_call();
               call.set_mode(climate::CLIMATE_MODE_OFF);
               call.perform();
-            } else if (id(thermostat_garage_konvector).mode == climate::CLIMATE_MODE_OFF) {
-              id(switch_peack_off).turn_off();
-            }
+            } 
+            //   else if (id(thermostat_garage_konvector).mode == climate::CLIMATE_MODE_OFF) {
+            //   id(switch_peack_off).turn_off();
+            // }
 
       - hours: 0-6,10-16,21-23   # ДЕНЬ, НОЧЬ
         minutes: 0-59
