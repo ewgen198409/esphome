@@ -81,7 +81,8 @@ wifi:
 
 web_server:
   port: 80
-  css_url: "https://github.com/ewgen198409/esphome/blob/main/thermostat/html/index.html"
+  css_url: "https://github.com/ewgen198409/esphome/blob/main/thermostat/html/styles.css"
+  js_url: "https://github.com/ewgen198409/esphome/blob/main/thermostat/html/script.js"
 
 udp:
 captive_portal:
