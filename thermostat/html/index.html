@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESPHome Thermostat Interface</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: black;
+            color: white;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+        .header, .footer {
+            width: 100%;
+            background-color: #2F8CD8;
+            background: linear-gradient(to bottom, #2F8CD8, #005782);
+            color: white;
+            text-align: center;
+            padding: 10px 0;
+        }
+        .content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            flex-grow: 1;
+        }
+        .button {
+            background-color: transparent;
+            border: 1px solid white;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 5px;
+        }
+        .slider {
+            width: 70%;
+            margin: 20px 0;
+        }
+        .dropdown {
+            width: 120px;
+            margin: 20px 0;
+        }
+        .arc-container {
+            position: relative;
+            width: 80%;
+            height: 200px;
+            margin-top: 20px;
+        }
+        .arc-container svg {
+            width: 100%;
+            height: 100%;
+        }
+        .spinner {
+            width: 30px;
+            height: 30px;
+            border: 3px solid #18bcf2;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+        .settings-button {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+        }
+        .page {
+            display: none;
+            width: 100%;
+            text-align: center;
+        }
+        .page.active {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .control-buttons {
+            display: flex;
+            justify-content: space-around;
+            width: 100%;
+            margin-top: 20px;
+        }
+        .temperature-display {
+            margin-top: 20px;
+            font-size: 1.5em;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div id="lbl_time">ESPHome</div>
+        <div id="lbl_wifistatus" style="display: none;">📶</div>
+        <div id="lbl_apistatus" style="display: none;">🔗</div>
+    </div>
+    <div class="content">
+        <div id="boot_screen" class="page active">
+            <img src="boot_logo.png" alt="Boot Logo" style="width: 50px; height: 50px;">
+            <div class="spinner"></div>
+            <div style="text-align: center; margin-top: 10px;">🏠 Home Thermostat</div>
+        </div>
+        <div id="page_one" class="page">
+            <div class="arc-container">
+                <svg viewBox="0 0 200 200">
+                    <circle cx="100" cy="100" r="80" stroke="white" stroke-width="4" fill="none"></circle>
+                    <circle id="arc_therm" cx="100" cy="100" r="80" stroke="orange" stroke-width="4" fill="none" stroke-dasharray="0, 502.4" transform="rotate(-120) translate(-100, -100)" transform-origin="center"></circle>
+                </svg>
+            </div>
+            <div class="control-buttons">
+                <div class="button" id="spin_down" onclick="adjustTemperature(-0.5)">-</div>
+                <div class="button" id="spin_up" onclick="adjustTemperature(0.5)">+</div>
+            </div>
+            <div class="temperature-display">
+                <div id="lbl_intemp">--°C</div>
+                <div id="lbl_outemp">🌡️ --.-°C</div>
+                <div id="lbl_state">-----</div>
+            </div>
+            <select class="dropdown" id="dropdown_id" onchange="changeMode()">
+                <option value="off">📴 Off</option>
+                <option value="heat">🔥 Heat</option>
+            </select>
+            <div class="button settings-button" id="settings_button" onclick="showPage('page_settings')">⚙️</div>
+        </div>
+        <div id="page_settings" class="page">
+            <input type="range" class="slider" id="slider_light" min="0" max="100" oninput="adjustLight(this.value)">
+            <label for="slider_light">Light:</label>
+            <hr style="width: 100%; border: 1px solid blue;">
+            <label>Gisteresis:</label>
+            <div style="display: flex; align-items: center;">
+                <input type="number" id="gist_down" step="0.5" min="0.0" max="2.0" oninput="adjustGisteresis('down', this.value)">
+                <label>🔽 Down:</label>
+            </div>
+            <div style="display: flex; align-items: center;">
+                <input type="number" id="gist_up" step="0.5" min="0.0" max="2.0" oninput="adjustGisteresis('up', this.value)">
+                <label>🔼 Up:</label>
+            </div>
+            <hr style="width: 100%; border: 1px solid blue;">
+            <div class="control-buttons">
+                <div class="button" id="home_btn" onclick="showPage('page_one')">🏠</div>
+                <div class="button" id="restart_btn" onclick="restartDevice()">🔄</div>
+                <div class="button" id="clock_btn" onclick="showPage('page_time')">Time</div>
+            </div>
+        </div>
+        <div id="page_time" class="page">
+            <div id="lvgl_clock_longdate">-----</div>
+            <div style="display: flex; justify-content: center;">
+                <div id="lvgl_clock_hour" style="font-size: 2em;">00</div>
+                <div>:</div>
+                <div id="lvgl_clock_minute" style="font-size: 2em;">00</div>
+            </div>
+            <div style="display: flex; justify-content: space-between; width: 100%;">
+                <div id="lbl_temp1" style="font-size: 1em;">🌡️ --.-°</div>
+                <div id="lbl_hum1" style="font-size: 1em;">💦 --.-%</div>
+            </div>
+            <div style="display: flex; justify-content: space-between; width: 100%; margin-top: 20px;">
+                <div id="lbl_iconweather" style="font-size: 2em;">--</div>
+                <div>
+                    <div id="lbl_tempweather" style="font-size: 1em;">Temp: -- °C</div>
+                    <div id="lbl_humweather" style="font-size: 1em;">Hum: -- %</div>
+                    <div id="lbl_windweather" style="font-size: 1em;">Wind: -- km/h</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="footer">
+        &copy; 2023 ESPHome Thermostat
+    </div>
+
+    <script>
+        let targetTemperature = 20.0;
+        let heatDeadband = 0.5;
+        let heatOverrun = 0.5;
+
+        function adjustTemperature(value) {
+            targetTemperature += value;
+            document.getElementById('lbl_intemp').innerText = targetTemperature.toFixed(1) + '°C';
+        }
+
+        function changeMode() {
+            const mode = document.getElementById('dropdown_id').value;
+            // Implement mode change logic here
+        }
+
+        function adjustLight(value) {
+            // Implement light adjustment logic here
+        }
+
+        function adjustGisteresis(type, value) {
+            if (type === 'down') {
+                heatDeadband = value;
+            } else if (type === 'up') {
+                heatOverrun = value;
+            }
+            // Implement gisteresis adjustment logic here
+        }
+
+        function showPage(pageId) {
+            document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
+            document.getElementById(pageId).classList.add('active');
+        }
+
+        function restartDevice() {
+            // Implement device restart logic here
+        }
+
+        // Initially show the first page
+        showPage('page_one');
+    </script>
+</body>
+</html>
