@@ -79,6 +79,10 @@ wifi:
     ssid: "Test Fallback Hotspot"
     password: "2BgdJnlx1D7T"
 
+web_server:
+  port: 80
+  css_url: "https://github.com/ewgen198409/esphome/blob/main/thermostat/html/index.html"
+
 udp:
 captive_portal:
 
@@ -121,7 +125,7 @@ image:
     id: boot_logo
     resize: 80x80
     type: RGB565
-    use_transparency: true
+    transparency: chroma_key
 
 button:
   - platform: restart
