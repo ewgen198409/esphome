@@ -1,0 +1,140 @@
+esphome:
+  name: webasto
+  friendly_name: webasto
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  password: "your_password"
+
+ota:
+  - platform: esphome
+    password: "your_password"
+
+wifi:
+  id: wifi_id
+  networks:
+    - ssid: !secret wifi_ssid
+      password: !secret wifi_password
+    - ssid: Keenetic-Home
+      password: "9994554500"
+
+captive_portal:
+
+# Example configuration entry
+
+
+globals:
+  - id: motor_running
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+
+  - id: valve_freq
+    type: float
+    restore_value: no
+    initial_value: '1.0'
+
+  - id: valve_state
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+
+output:
+  - platform: ledc
+    id: motor_pwm
+    pin: GPIO25
+    frequency: 60Hz  # Фиксированная частота мотора
+
+  - platform: gpio  # Клапан теперь управляется вручную
+    id: valve_output
+    pin: GPIO26
+
+light:
+  - platform: monochromatic
+    output: motor_pwm
+    id: motor
+    name: "Motor"
+    gamma_correct: 1.0
+    default_transition_length: 0s
+
+binary_sensor:
+  - platform: gpio
+    pin: GPIO27
+    name: "Start Button"
+    on_click:
+      then:
+        - script.execute: motor_valve_control
+
+script:
+  - id: motor_valve_control
+    mode: restart
+    then:
+      - if:
+          condition:
+            lambda: 'return !id(motor_running);'
+          then:
+            - logger.log: "Starting motor and valve..."
+            - lambda: 'id(motor_running) = true;'
+            - light.turn_on:
+                id: motor
+                brightness: 30%  # Начальная скважность мотора
+            - lambda: 'id(valve_freq) = 1.0;'
+            - script.execute: valve_pwm_generator
+            - while:
+                condition:
+                  lambda: 'return id(motor).current_values.get_brightness() < 0.7;'
+                then:
+                  - lambda: |-
+                      float motor_duty = id(motor).current_values.get_brightness() * 100;
+                      if (motor_duty < 70) {
+                        motor_duty += 1;
+                        id(motor).turn_on().set_brightness(motor_duty / 100.0);
+                      }
+                  - lambda: |-
+                      if (id(valve_freq) < 6.0) {
+                        id(valve_freq) += 0.125;
+                      }
+                  - delay: 250ms
+            - logger.log: "Motor and valve at full speed."
+
+          else:
+            - logger.log: "Stopping motor and valve..."
+            - lambda: 'id(motor_running) = false;'
+            - while:
+                condition:
+                  lambda: 'return id(motor).current_values.get_brightness() > 0.3;'
+                then:
+                  - lambda: |-
+                      float motor_duty = id(motor).current_values.get_brightness() * 100;
+                      if (motor_duty > 30) {
+                        motor_duty -= 1;
+                        id(motor).turn_on().set_brightness(motor_duty / 100.0);
+                      }
+                  - lambda: |-
+                      if (id(valve_freq) > 1.0) {
+                        id(valve_freq) -= 0.125;
+                      }
+                  - delay: 250ms
+            - light.turn_off: motor
+            - lambda: 'id(valve_freq) = 1.0;'
+            - logger.log: "Motor and valve stopped."
+
+  - id: valve_pwm_generator
+    mode: restart
+    then:
+      - while:
+          condition:
+            lambda: 'return id(motor_running);'
+          then:
+            - lambda: |-
+                id(valve_state) = !id(valve_state);
+                id(valve_output).set_level(id(valve_state) ? 1.0 : 0.0);
+            - delay: !lambda 'return int(500 / id(valve_freq));'  # Генерация PWM вручную

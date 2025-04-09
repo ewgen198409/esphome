@@ -13,6 +13,38 @@ logger:
 api:
   encryption:
     key: "jer1RLt6wpw9Q2ZnJaq54YHwiTj4vJ9CAsyeJ5U16Jw="
+  reboot_timeout: 0s
+  on_client_connected:
+    then:
+      - light.addressable_set:
+          id: led_button_panel
+          range_from: 0
+          range_to: 4
+          red: 1.0
+          green: 0
+          blue: 0
+      - delay: 500ms
+      - light.turn_off: led_button_panel
+      - delay: 500ms
+      - light.addressable_set:
+          id: led_button_panel
+          range_from: 0
+          range_to: 4
+          red: 1.0
+          green: 0
+          blue: 0
+      - delay: 500ms
+      - light.turn_off: led_button_panel
+      - delay: 500ms
+      - light.addressable_set:
+          id: led_button_panel
+          range_from: 0
+          range_to: 4
+          red: 1.0
+          green: 0
+          blue: 0
+      - delay: 500ms
+      - light.turn_off: led_button_panel
 
 ota:
   - platform: esphome
@@ -24,6 +56,37 @@ wifi:
       password: !secret wifi_password
     - ssid: Keenetic-Home
       password: "9994554500"
+  on_connect:
+    then:
+      - light.addressable_set:
+          id: led_button_panel
+          range_from: 0
+          range_to: 4
+          red: 0
+          green: 0
+          blue: 1.0
+      - delay: 500ms
+      - light.turn_off: led_button_panel
+      - delay: 500ms
+      - light.addressable_set:
+          id: led_button_panel
+          range_from: 0
+          range_to: 4
+          red: 0
+          green: 0
+          blue: 1.0
+      - delay: 500ms
+      - light.turn_off: led_button_panel
+      - delay: 500ms
+      - light.addressable_set:
+          id: led_button_panel
+          range_from: 0
+          range_to: 4
+          red: 0
+          green: 0
+          blue: 1.0
+      - delay: 500ms
+      - light.turn_off: led_button_panel
 
   ap:
     ssid: "Block-Office Fallback Hotspot"
@@ -269,13 +332,13 @@ binary_sensor:
         - ON for at most 0.5s
         - OFF for at least 0.5s
         then:
-          - light.turn_on: office_left_lamp
+          - light.toggle: office_left_lamp
 
-      # long press    
-      - timing:
-          - ON for at least 1s
-        then:
-          - light.turn_off: office_left_lamp
+      # # long press    
+      # - timing:
+      #     - ON for at least 1s
+      #   then:
+      #     - light.turn_off: office_left_lamp
 
       # # double click    
       # - timing:
@@ -315,13 +378,13 @@ binary_sensor:
         - ON for at most 0.5s
         - OFF for at least 0.5s
         then:
-          - light.turn_on: office_right_lamp
+          - light.toggle: office_right_lamp
 
-      # long press    
-      - timing:
-          - ON for at least 1s
-        then:
-          - light.turn_off: office_right_lamp
+      # # long press    
+      # - timing:
+      #     - ON for at least 1s
+      #   then:
+      #     - light.turn_off: office_right_lamp
 
       # # double click    
       # - timing:
