@@ -77,23 +77,29 @@ sensor:
     calibration:
       b_constant: 3950
       reference_temperature: 25°C
-      reference_resistance: 30kOhm
+      reference_resistance: 10kOhm
     name: NTC Temperature
     unit_of_measurement: "°C"
     device_class: "temperature"
     state_class: "measurement"
     accuracy_decimals: 1
+    filters:
+      - offset: !lambda return id(ntc_temp_correction);
     on_value:
       - lvgl.label.update:
           id: lbl_testtemp
           text:
             format: "\U000F0F55 %.1f°c"
             args: [ 'x' ]
-
       - lvgl.label.update:
           id: lbl_outemp
           text:
             format: "\U000F0F55 %.1f°c"
+            args: [ 'x' ]
+      - lvgl.label.update:
+          id: lbl_temp1
+          text:
+            format: "\U000F050F: %.1f°"
             args: [ 'x' ]
 
   - platform: resistance

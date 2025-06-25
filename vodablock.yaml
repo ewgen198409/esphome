@@ -25,7 +25,7 @@ esp32:
     type: esp-idf
 
 preferences:
-  flash_write_interval: 10s
+  flash_write_interval: 5min
 
 external_components:
   - source: github://pr#7942
@@ -37,7 +37,7 @@ logger:
 
 api:
   # если отвалился api ha - ничего не делать
-  reboot_timeout: 0s
+#  reboot_timeout: 0s
   encryption:
     key: "AxmKtUF5x1HHDYVusVzUtAV4H8WE013HRPRmpt4afqM="
 
@@ -47,19 +47,13 @@ ota:
 
 wifi:
   id: wifi_id
+  output_power: 15dB
   networks:
-    - ssid: !secret wifi_ssid
-      password: !secret wifi_password
+    - ssid: IoT_Office
+      password: "9514210798"
     - ssid: Keenetic-Home
       password: "9994554500"
-  # если отвалился wifi - перезагружать каждый час
-  reboot_timeout: 60min
   use_address: vodablock.local
-  # manual_ip:
-  #   static_ip: 192.168.1.164
-  #   gateway: 192.168.1.1
-  #   subnet: 255.255.255.0
-  #   dns1: 77.88.8.8
   on_connect:
     then:
       - rtttl.play: 'scale_up:d=32,o=5,b=100:c,c#,d#,e,f#,g#,a#,b'
@@ -301,7 +295,7 @@ sensor:
     address: 0x687c70190264ff28
     name: Датчик холодной воды
     id: sensor_cold_water
-    update_interval: 1s
+    update_interval: 10s
     unit_of_measurement: "°C"
     icon: "mdi:water-thermometer-outline"
     device_class: "temperature"
@@ -312,7 +306,7 @@ sensor:
     address: 0x755591ed0264ff28
     name: Датчик горячей воды
     id: sensor_hot_water
-    update_interval: 1s
+    update_interval: 10s
     unit_of_measurement: "°C"
     icon: "mdi:water-thermometer-outline"
     device_class: "temperature"
@@ -324,7 +318,7 @@ sensor:
     pin: GPIO2
     id: Waterbox_Leak_Detection1
     name: "Датчик утечки воды 1"
-    update_interval: 1s
+    update_interval: 5s
     accuracy_decimals: 1    
     unit_of_measurement: 'V'
 
@@ -344,7 +338,7 @@ sensor:
     pin: GPIO3
     id: Waterbox_Leak_Detection2
     name: "Датчик утечки воды 2"
-    update_interval: 1s
+    update_interval: 5s
     accuracy_decimals: 1    
     unit_of_measurement: 'V'   
 
@@ -428,9 +422,7 @@ time:
     id: homeassistant_time
     timezone: Asia/Omsk
     servers:
-      - 0.pool.ntp.org
       - 192.168.1.1
-      - 2.openwrt.pool.ntp.org
 
     on_time_sync:
       then:

@@ -1,23 +1,26 @@
 esphome:
   name: block-prihozka
-  friendly_name: Block_Prihozka 
+#  friendly_name: Block_Prihozka
+  platformio_options:
+    board_build.ldscript: eagle.flash.4m2m.ld
 
 esp8266:
   board: d1_mini
   restore_from_flash: true
-
-# web_server:
-#   port: 80
-#   version: 2
+  board_flash_mode: qio
 
 preferences:
-  flash_write_interval: 1min
+  flash_write_interval: 5min
   
-# Enable logging
-logger:
+# # Enable logging
+# logger:
+#   level: DEBUG
+
+# debug:
+#   update_interval: 5s
 
 api:
-  reboot_timeout: 0s
+#  reboot_timeout: 0s
   encryption:
     key: "KOWDAA8XBu8jM5F884wvQ6ji5Mhwm2J29yZXx2C9Kko="
 
@@ -26,17 +29,17 @@ ota:
     password: "9aa6e161a6c491657f320a1b15fde731"
 
 wifi:
+  output_power: 12dB
   networks:
-    - ssid: !secret wifi_ssid
-      password: !secret wifi_password
+    - ssid: WiFi_IoT
+      password: "ewgeniy507388"
     - ssid: Keenetic-Home
       password: "9994554500"
 
-  ap:
-    ssid: "Block-Prihozka Fallback Hotspot"
-    password: "mXyPb1kexKGo"
+  # ap:
+  #   ssid: "Block-Prihozka Fallback Hotspot"
+  #   password: "mXyPb1kexKGo"
 
-udp:
 
 # ===================== MQTT ========================================
 mqtt:
@@ -53,9 +56,7 @@ time:
     id: ntp_time
     timezone: Asia/Omsk
     servers:
-      - 0.openwrt.pool.ntp.org
-      - 1.openwrt.pool.ntp.org
-      - 2.openwrt.pool.ntp.org
+      - 192.168.1.1
 
 # ===============================================================
 button:
@@ -68,6 +69,13 @@ text_sensor:
       name: IP Address
     ssid:
       name: SSID
+  # DEBUG
+  # - platform: debug
+  #   device:
+  #     name: "Device Info"
+  #   reset_reason:
+  #     name: "Reset Reason"
+
 
   # Сенсор времени ESPHOME
   - platform: template
@@ -131,7 +139,7 @@ sensor:
     address: 0xca2d99bd0164ff28
     name: "Holl Temperature"
     id: sensor_holl_temp
-    update_interval: 1s
+    update_interval: 60s
     unit_of_measurement: "°C"
     icon: mdi:thermometer
     device_class: "temperature"
@@ -162,7 +170,7 @@ sensor:
       id: dvor_hum
       name: "Dvor Humidity"
       unit_of_measurement: '%'
-    update_interval: 5s
+    update_interval: 60s
 
 
 
@@ -233,14 +241,20 @@ light:
     restore_mode: ALWAYS_OFF
 # ================================================================================
 # ============ Сенсор включения света во дворе по UDP ============================
-binary_sensor:
+
+udp:
+  id: udp_hub
+
+packet_transport:
   - platform: udp
+  
+binary_sensor:
+  - platform: packet_transport
     provider: switch-prihozka
-    id: dvor_light_udp
-    remote_id: binary_switch_1
+    id: binary_switch_1
     internal: true
     on_multi_click:
-      # triple click (свет во дворе)
+      # тройной клик (свет во дворе)
       - timing:
           - ON for at most 0.5s
           - OFF for at most 0.5s
@@ -249,8 +263,25 @@ binary_sensor:
           - ON for at most 0.5s
           - OFF for at least 0.5s
         then:
-          - light.toggle: dvor_right_lamp
-          - light.toggle: dvor_left_lamp
+          - lambda: |-
+              // Проверяем, включен ли хотя бы один из светильников
+              // Теперь правильно используем .current_values.is_on() как МЕТОД
+              if (id(dvor_left_lamp).current_values.is_on() || id(dvor_right_lamp).current_values.is_on()) {
+                // Если хотя бы один светильник включен, выключаем те, что горят
+                if (id(dvor_left_lamp).current_values.is_on()) {
+                  // Если левый светильник включен, выключаем его
+                  id(dvor_left_lamp).turn_off().perform();
+                }
+                if (id(dvor_right_lamp).current_values.is_on()) {
+                  // Если правый светильник включен, выключаем его
+                  id(dvor_right_lamp).turn_off().perform();
+                }
+              } else {
+                // Если оба светильника выключены, включаем оба
+                id(dvor_left_lamp).turn_on().perform();
+                id(dvor_right_lamp).turn_on().perform();
+              }
+              
       # quad click  (вентиляция)
       - timing:
           - ON for at most 0.5s

@@ -24,10 +24,10 @@ ota:
 
 wifi:
   networks:
-    - ssid: !secret wifi_ssid
-      password: !secret wifi_password
     - ssid: Keenetic-Home
       password: "9994554500"
+    - ssid: IoT_Office
+      password: "9514210798"
   use_address: light-spalnya.local
   # manual_ip:
   #   static_ip: 192.168.1.109
@@ -36,8 +36,12 @@ wifi:
   #   dns1: 77.88.8.8
 # Отправляем в сеть свой бинарный сенсор (binary_switch)
 udp:
-  binary_sensors:
-    - binary_switch
+  id: udp_hub
+
+packet_transport:
+  - platform: udp
+    binary_sensors:
+      - binary_switch
 
 text_sensor:
   - platform: libretiny
@@ -52,7 +56,7 @@ text_sensor:
 
 binary_sensor:
   # Принимаем из сети бинаный сенсор (binary_switch_1 и binary_switch_2 из выключателей бра) и управляем им основным светом
-  - platform: udp
+  - platform: packet_transport
     provider: brah-spalnya
     id: binary_switch_bra_1
     remote_id: binary_switch_1
@@ -63,14 +67,14 @@ binary_sensor:
         then:
           light.toggle: spalnya_lamp
 
-  - platform: udp
+  - platform: packet_transport
     provider: brah-spalnya
     id: binary_switch_bra_2
     remote_id: binary_switch_2
     internal: true
     on_multi_click:
       - timing:
-          - ON for at least 1.5s
+          - ON for at least 1.0s
         then:
           light.toggle: spalnya_lamp
 

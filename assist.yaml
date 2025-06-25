@@ -38,8 +38,8 @@ ota:
 
 wifi:
   networks:
-    - ssid: !secret wifi_ssid
-      password: !secret wifi_password
+    - ssid: IoT_Office
+      password: "9514210798"
     - ssid: OpenWrt_Garage
       password: "9514210798"
   reboot_timeout: 0s
@@ -502,97 +502,120 @@ image:
   - file: battery-high.png
     id: bathigh
     resize: 27x20
-    type: TRANSPARENT_BINARY
+    type: BINARY
+    transparency: chroma_key
   - file: battery-medium.png
     id: batmedium
     resize: 27x20
-    type: TRANSPARENT_BINARY
+    type: BINARY
+    transparency: chroma_key
   - file: battery-low.png
     id: batlow
     resize: 27x20
-    type: TRANSPARENT_BINARY
+    type: BINARY
+    transparency: chroma_key
   - file: batdead.png
     id: batdead
     resize: 27x20
-    type: TRANSPARENT_BINARY
+    type: BINARY
+    transparency: chroma_key
     # WiFi img
   - file: wifi-strength-1-custom.png
     id: wifi1
     resize: 14x14
-    type: TRANSPARENT_BINARY
+    type: BINARY
+    transparency: chroma_key
   - file: wifi-strength-2-custom.png
     id: wifi2
     resize: 14x14
-    type: TRANSPARENT_BINARY
+    type: BINARY
+    transparency: chroma_key
   - file: wifi-strength-3-custom.png
     id: wifi3
     resize: 14x14
-    type: TRANSPARENT_BINARY
+    type: BINARY
+    transparency: chroma_key
   - file: wifi-strength-4-custom.png
     id: wifi4
     resize: 14x14
-    type: TRANSPARENT_BINARY
+    type: BINARY
+    transparency: chroma_key
 
 # икоки погоды
   - file: mdi:clock-outline
     id: clock_icon
     resize: 16x16
+    type: BINARY
+    transparency: chroma_key
 
   - file: "moon.png"
     id: my_moon
     resize: 24x24
-    type: TRANSPARENT_BINARY
+    type: BINARY
+    transparency: chroma_key
 
   - file: "cloudy.png"
     id: my_cloudy
     resize: 25x25
-    type: TRANSPARENT_BINARY
+    type: BINARY
+    transparency: chroma_key
 
   - file: "snow.png"
     id: my_snow
     resize: 25x25
-    type: TRANSPARENT_BINARY
+    type: BINARY
+    transparency: chroma_key
 
   - file: "soon.png"
     id: my_soon
     resize: 25x25
-    type: TRANSPARENT_BINARY
+    type: BINARY
+    transparency: chroma_key
 
   - file: "zarko.png"
     id: my_zarko
     resize: 25x25
-    type: TRANSPARENT_BINARY
+    type: BINARY
+    transparency: chroma_key
 
   - file: "groza.png"
     id: my_groza
     resize: 25x25
-    type: TRANSPARENT_BINARY
+    type: BINARY
+    transparency: chroma_key
 
   - file: "veter.png"
     id: my_veter
     resize: 25x25
-    type: TRANSPARENT_BINARY
+    type: BINARY
+    transparency: chroma_key
 
   - file: "weather.png"
     id: my_dozd
     resize: 25x25
-    type: TRANSPARENT_BINARY
+    type: BINARY
+    transparency: chroma_key
 
   # ICON VOICE
   - file: speaker.png
     id: voiceon
     resize: 14x14
-    type: TRANSPARENT_BINARY
+    type: BINARY
+    transparency: chroma_key
+
   - file: mic.png
     id: micon
     resize: 13x13
-    type: TRANSPARENT_BINARY
+    type: BINARY
+    transparency: chroma_key
 
 animation:
   - file: speak.gif
     id: speakgif
     resize: 128x64
-
+    type: BINARY
+    transparency: chroma_key
+    
 remote_transmitter:
   pin: GPIO16
   carrier_duty_percent: 50%

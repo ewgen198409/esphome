@@ -122,6 +122,18 @@ lvgl:
     # Страница термостата
     - id: page_one
       widgets:
+      # Фоновое изображение (первый виджет)
+        - image:
+            id: bg_image
+            src: my_background_image  # Ссылаемся на объявленное изображение
+            x: 0
+            y: 0
+            width: 100%
+            height: 100%
+            # mode: REAL
+            align: CENTER
+            zoom: 1.0
+
         - arc:
             x: 0
             y: 12
@@ -308,6 +320,7 @@ lvgl:
               outline_opa: COVER
               outline_pad: 0
             on_click:
+              # Переход на page_settings
               - lvgl.page.show: page_settings
             widgets:
               - label:
@@ -321,7 +334,19 @@ lvgl:
 
     # Страница настроек
     - id: page_settings
+
       widgets:
+      # Фоновое изображение (первый виджет)
+        - image:
+            id: bg_settings_image
+            src: time_background_image  # Ссылаемся на объявленное изображение
+            x: 0
+            y: 0
+            width: 100%
+            height: 100%
+            mode: REAL
+            align: CENTER
+
         # слайдер яркости дисплея
         - slider:
             x: 50
@@ -400,7 +425,7 @@ lvgl:
             value: !lambda |-
                       return id(heat_deadband);  // Предполагаем, что heat_overrun сохранен в формате x10
             x: 80
-            y: 63
+            y: 60
             width: 45
             height: 20
             on_value:
@@ -416,7 +441,7 @@ lvgl:
             text: "\U000F0E04 Down:"
             text_color: white
             x: 25
-            y: 64
+            y: 60
         
         # Гистерезис выше заданной
         - spinbox:
@@ -437,7 +462,7 @@ lvgl:
             value: !lambda |-
                       return id(heat_overrun);  // Предполагаем, что heat_overrun сохранен в формате x10
             x: 80
-            y: 91
+            y: 87
             width: 45
             height: 20
             on_value:
@@ -453,12 +478,45 @@ lvgl:
             text: "\U000F0E05 Up:"
             text_color: white
             x: 25
-            y: 91
+            y: 87
+
+        - label:
+            text_font: tahoma_12
+            id: lbl_temp_corr
+            text: "Temp.correct:"
+            text_color: white
+            x: 2
+            y: 113
+
+        # Регулировка коррекции температуры
+        - spinbox:
+            id: temp_correction
+            text_align: center
+            text_font: tahoma_12
+            focus_key:
+              outline_color: orange
+              outline_opa: COVER
+              outline_pad: 1
+            pad_all: 0
+            range_from: -9.0
+            range_to: 9.0
+            step: 0.1
+            digits: 2
+            decimal_places: 1
+            value: !lambda return id(ntc_temp_correction);
+            x: 80
+            y: 113
+            width: 45
+            height: 20
+            on_value:
+              then:
+                - lambda: |-
+                    id(ntc_temp_correction) = x;
 
         - line:
             points:
-              - 3, 120
-              - 125, 120
+              - 3, 136
+              - 125, 136
             line_width: 1
             line_color: 0x0000FF
             line_rounded: true
@@ -482,7 +540,8 @@ lvgl:
                   text: "\uF015"
             on_click:
               then:
-                lvgl.page.show: page_one
+                # Переход на page_one
+                - lvgl.page.show: page_one
 
         # кнопка перезагрузки
         - button:
@@ -534,6 +593,15 @@ lvgl:
       bg_color: black
       bg_opa: COVER
       widgets:
+        - image:
+            id: bg_time_image
+            src: time_background_image  # Ссылаемся на объявленное изображение
+            x: 0
+            y: 0
+            width: 100%
+            height: 100%
+            align: CENTER
+
         - label:
             id: lvgl_clock_longdate
             x: 5
@@ -544,6 +612,7 @@ lvgl:
             text_font: tahoma_14
             text_align: LEFT
             text: " ----- "
+
         - obj:
             x: -35
             y: 0
@@ -567,7 +636,7 @@ lvgl:
                   width: SIZE_CONTENT
                   height: SIZE_CONTENT
                   text_color: 0xFFFFFF
-                  text_font: digital_36
+                  text_font: digital_38
                   text_align: CENTER
                   text: "00"
         - obj:
@@ -593,7 +662,7 @@ lvgl:
                   width: SIZE_CONTENT
                   height: SIZE_CONTENT
                   text_color: 0xFFFFFF
-                  text_font: digital_36
+                  text_font: digital_38
                   text_align: CENTER
                   text: "00"
         - label:
@@ -603,7 +672,7 @@ lvgl:
             width: SIZE_CONTENT
             height: SIZE_CONTENT
             text_color: 0xFFFFFF
-            text_font: digital_36
+            text_font: digital_38
             text_align: CENTER
             text: ":"
 

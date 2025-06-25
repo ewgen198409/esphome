@@ -26,6 +26,9 @@ esphome:
     - lvgl.spinbox.update:
         id: gist_up
         value: !lambda return id(heat_overrun);
+    - lvgl.spinbox.update:
+        id: temp_correction
+        value: !lambda return id(ntc_temp_correction) * 10;
 
 esp32:
   board: lolin32_lite
@@ -70,6 +73,8 @@ wifi:
       password: "9514210798"
     - ssid: Keenetic-Home
       password: "9994554500"
+    - ssid: IoT_Office
+      password: "9514210798"
   on_connect:
     then:
       - lvgl.widget.show: lbl_wifitatus
@@ -81,8 +86,6 @@ wifi:
 
 web_server:
   port: 80
-  # css_url: "https://github.com/ewgen198409/esphome/blob/main/thermostat/html/styles.css"
-  # js_url: "https://github.com/ewgen198409/esphome/blob/main/thermostat/html/script.js"
 
 udp:
 captive_portal:
@@ -127,6 +130,16 @@ image:
     resize: 80x80
     type: RGB565
     transparency: chroma_key
+
+  - id: my_background_image
+    file: "img/img11.jpg"
+    type: rgb565
+    resize: 130x170  # Опционально: масштабирование при загрузке
+
+  - id: time_background_image
+    file: "img/img8.jpg"
+    type: rgb565
+    resize: 130x170  # Опционально: масштабирование при загрузке
 
 button:
   - platform: restart
@@ -213,4 +226,15 @@ globals:
     type: float
     initial_value: "0.5"
     restore_value: true
+
+  - id: ntc_temp_correction
+    type: float
+    initial_value: "0.0"
+    restore_value: true
+
+  - id: current_page
+    type: int
+    restore_value: no
+    initial_value: '0'  # например, 0 = page_one, 1 = page_settings
+
 

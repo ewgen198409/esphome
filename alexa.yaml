@@ -1,0 +1,473 @@
+substitutions:
+  media_player_entity: "media_player.chromepc"
+
+esphome:
+  name: alexa
+
+esp32:
+  board: esp32-c3-devkitm-1
+  framework:
+    type: esp-idf
+  # framework:
+  #   type: esp-idf
+  #   version: 4.4.8
+  #   platform_version: 5.4.0
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: "c+M3yRoST8qnH2fFAmCj9SJ3ZdECgc8o5/cZEGsKWBg="
+
+ota:
+  - platform: esphome
+    password: "312f283a0164fce9b713ecd13a3cf624"
+
+wifi:
+  networks:
+    - ssid: "IoT_Office"
+      password: "9514210798"
+    - ssid: "OpenWrt_Garage"
+      password: "9514210798"
+
+  fast_connect: false
+  power_save_mode: none
+  on_connect:
+    - lambda: |-
+        id(led_ww).turn_on().set_brightness(1.0).set_rgb(1.0, 1.0, 0).set_effect("scan").perform();
+    - delay: 2s
+    - lambda: |-
+        id(led_ww).turn_off().perform();
+
+deep_sleep:
+  id: deep_sleep_1
+  wakeup_pin:
+    number: 5
+    allow_other_uses: true
+  wakeup_pin_mode: KEEP_AWAKE
+
+i2s_audio:
+  i2s_lrclk_pin: GPIO3   #WS/LRC
+  i2s_bclk_pin: GPIO2    #SCK/BCLK
+
+microphone:
+  - platform: i2s_audio
+    id: esp32_microphone
+    i2s_din_pin: GPIO4    #SD
+    adc_type: external
+    pdm: false
+    channel: left
+    bits_per_sample: 32bit
+    sample_rate: 16000
+
+speaker:
+  - platform: i2s_audio
+    id: esp32_mplayer
+    dac_type: external
+    i2s_mode: primary
+    buffer_duration: 1s
+    i2s_dout_pin: GPIO8     #DIN
+
+voice_assistant:
+  id: assist
+  microphone: esp32_microphone
+  speaker: esp32_mplayer
+  use_wake_word: false
+  noise_suppression_level: 2    #2
+  auto_gain: 0dBFS             #31dBFS
+  volume_multiplier: 1.0        #2.5
+  on_tts_stream_start:
+    - lambda: |-
+        id(led_ww).turn_on().set_brightness(1.0).set_rgb(0, 1.0, 0).set_effect("scan").perform();
+  
+  on_tts_stream_end:
+    - lambda: |-
+        id(led_ww).turn_off().perform();
+
+
+  on_tts_end:
+    - if:
+        condition:
+          switch.is_on: use_voice_speack
+        then:
+          - speaker.mute_on: esp32_mplayer
+          - homeassistant.service:
+              service: media_player.play_media
+              data:
+                media_content_id: !lambda 'return x;'
+                media_content_type: audio/mpeg
+                entity_id: "${media_player_entity}"
+
+  on_client_connected:
+    - if:
+        condition:
+          switch.is_on: use_wake_word
+        then:
+          - voice_assistant.start_continuous
+
+  on_client_disconnected:
+    - if:
+        condition:
+          switch.is_on: use_wake_word
+        then:
+          - voice_assistant.stop
+
+  on_end:
+    - if:
+        condition:
+          switch.is_off: use_voice_speack
+        then:
+          speaker.mute_off: esp32_mplayer
+
+  on_wake_word_detected:
+    - light.turn_on:
+        id: led_ww           
+        red: 30%
+        green: 30%
+        blue: 70%
+        brightness: 60%
+        effect: fast pulse 
+
+  on_error:
+    - lambda: |-
+        id(led_ww).turn_on().set_brightness(1.0).set_rgb(1.0, 0, 0).set_effect("scan").perform();
+    - delay: 3s
+    - lambda: |-
+        id(led_ww).turn_off().perform();
+
+
+binary_sensor:
+  # Кнопка "Гровкость выше"
+  - platform: gpio
+    pin:
+      number: GPIO7
+      inverted: true
+      mode:
+        input: true
+        pullup: true
+    name: "Button 1"
+    internal: true
+    on_multi_click:
+      # one click
+      - timing:
+        - ON for at most 0.5s
+        - OFF for at least 0.5s
+        then:
+        - lambda: |-
+            auto vol = id(esp32_mplayer).get_volume();
+            if (vol < 1.0) {
+              id(esp32_mplayer).set_volume(vol + 0.1);
+            }
+        # устанавливаем ползунок громкости
+        - lambda: |-
+            auto volind = id(volume_level_in).make_call();
+            volind.set_value(id(esp32_mplayer).get_volume() * 100);
+            volind.perform();
+        # Скрипт светодиодов
+        - script.execute: control_leds_dial_touched
+
+  # Кнопка "Вызов"
+  - platform: gpio
+    pin:
+      number: GPIO6
+      inverted: true
+      mode:
+        input: true
+        pullup: true
+    name: "Button 2"
+    internal: true
+    on_multi_click:
+      # one click
+      - timing:
+        - ON for at most 0.5s
+        - OFF for at least 0.5s
+        then:
+          - voice_assistant.start        
+          - lambda: |-
+              if (!id(use_wake_word).state) {
+                auto call = id(led_ww).make_call();
+                call.set_state(true);  // важно — явно включить
+                call.set_rgb(0.3, 0.3, 0.7);
+                call.set_brightness(0.6);
+                call.set_effect("fast pulse");
+                call.perform();
+              }
+
+      # double click    
+      - timing:
+          - ON for at most 0.5s
+          - OFF for at most 0.5s
+          - ON for at most 0.5s
+          - OFF for at least 0.5s
+        then:
+          - switch.toggle: use_wake_word
+
+
+  # кнопка выкл
+  - platform: gpio
+    pin:
+      number: GPIO5
+      allow_other_uses: true
+      inverted: false
+      mode:
+        input: true
+        pulldown: true
+    name: "Button 3"
+    internal: true
+    on_multi_click:
+      # long press    
+      - timing:
+          - ON for at least 2s
+        then:
+          - deep_sleep.enter: deep_sleep_1
+
+
+
+  # Кнопка "Гровкость ниже"
+  - platform: gpio
+    pin:
+      number: GPIO9
+      inverted: true
+      mode:
+        input: true
+        pullup: true
+    name: "Button 4"
+    internal: true
+    on_multi_click:
+      # one click
+      - timing:
+        - ON for at most 0.5s
+        - OFF for at least 0.5s
+        then:
+        - lambda: |-
+            auto vol = id(esp32_mplayer).get_volume();
+            if (vol > 0.0) {
+              id(esp32_mplayer).set_volume(vol - 0.1);
+            }
+        # устанавливаем ползунок громкости
+        - lambda: |-
+            auto volind = id(volume_level_in).make_call();
+            volind.set_value(id(esp32_mplayer).get_volume() * 100);
+            volind.perform();
+        # Скрипт светодиодов
+        - script.execute: control_leds_dial_touched
+
+light:
+  - platform: esp32_rmt_led_strip
+    id: led_ww
+    rgb_order: GRB
+    pin: GPIO1
+    num_leds: 4
+    chipset: ws2812
+    name: "on board light"
+    effects:
+      - addressable_color_wipe:
+          name: "color wipe"
+      - pulse:
+          name: "Fast Pulse"
+          transition_length: 0.5s
+          update_interval: 0.5s
+          min_brightness: 0%
+          max_brightness: 100%
+      - addressable_scan:
+          name: "scan"
+      - addressable_lambda:
+          name: "Volume Display"
+          update_interval: 50ms
+          lambda: |-
+            // Получаем текущее значение громкости (значения от 0.0 до 1.0)
+            float volume = id(esp32_mplayer).get_volume();
+
+            // Явно устанавливаем цвета с полной яркостью
+            Color blue_color(0, 0, 255);     // Синий для низкой громкости
+            Color green_color(0, 255, 0);     // Зеленый для средней громкости
+            Color orange_color(255, 128, 0);  // Оранжевый для высокой громкости
+            Color red_color(255, 0, 0);     // Красный для максимальной громкости
+            Color purple_color(255, 0, 255); // Фиолетовый для отключенного звука
+            Color white_color(255, 255, 255); // Белый для отладки
+
+            // Функция преобразования логического индекса в физический
+            // Текущий порядок: 2143, нужный порядок: 3421
+            auto logical_to_physical = [](int logical_idx) -> int {
+              switch (logical_idx) {
+                case 0: return 3; // Логический 1 (начало) -> Физический 4
+                case 1: return 2; // Логический 2 -> Физический 3
+                case 2: return 0; // Логический 3 -> Физический 1
+                case 3: return 1; // Логический 4 (конец) -> Физический 2
+                default: return logical_idx;
+              }
+            };
+
+            // Сначала сбрасываем все светодиоды
+            for (int i = 0; i < 4; i++) {
+              it[i] = Color::BLACK;
+            }
+
+            // Проверка на отключенный звук
+            if (volume <= 0.0f) {
+              // Если звук выключен - попеременно включаем/выключаем все светодиоды
+              int timer_ms = (int)(millis() % 1000);
+              if (timer_ms < 500) {
+                for (int i = 0; i < 4; i++) {
+                  it[i] = purple_color; // Мигаем всеми светодиодами в физическом порядке
+                }
+              } else {
+                for (int i = 0; i < 4; i++) {
+                  it[i] = Color::BLACK;
+                }
+              }
+              return; // Выходим из функции
+            }
+
+            // Проверка на максимальную громкость (>= 0.95)
+            if (volume >= 0.95f) {
+              // Мигание красным при максимальной громкости
+              int timer_ms = (int)(millis() % 800);
+              if (timer_ms < 400) {
+                for (int i = 0; i < 4; i++) {
+                  // Используем физический порядок для более быстрой работы
+                  it[i] = red_color;
+                }
+              } else {
+                for (int i = 0; i < 4; i++) {
+                  it[i] = Color::BLACK;
+                }
+              }
+              return; // Выходим из функции
+            }
+
+            // Равномерное распределение для 4 светодиодов:
+            // 0.01-0.24: 1 LED
+            // 0.25-0.49: 2 LEDs
+            // 0.50-0.74: 3 LEDs
+            // 0.75-0.94: 4 LEDs
+            // >= 0.95: мигание (обработано выше)
+
+            int leds_on = 0;
+            if (volume > 0.0f && volume < 0.25f) {
+              leds_on = 1;
+            } else if (volume < 0.5f) {
+              leds_on = 2;
+            } else if (volume < 0.75f) {
+              leds_on = 3;
+            } else {
+              leds_on = 4;
+            }
+
+            // Выбираем цвет на основе уровня громкости
+            Color selected_color;
+            if (volume <= 0.25f) {
+              selected_color = blue_color;
+            } else if (volume <= 0.5f) {
+              selected_color = green_color;
+            } else if (volume <= 0.75f) {
+              selected_color = orange_color;
+            } else {
+              selected_color = red_color;
+            }
+
+            // Зажигаем соответствующее количество светодиодов в логическом порядке
+            for (int logical_idx = 0; logical_idx < leds_on; logical_idx++) {
+              int physical_idx = logical_to_physical(logical_idx);
+              it[physical_idx] = selected_color;
+            }
+
+switch:
+  - platform: template
+    icon: mdi:volume-high
+    name: "Use external speaker"
+    id: use_voice_speack
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    entity_category: config
+
+  - platform: template
+    name: "Use wake word"
+    icon: mdi:microphone-outline
+    id: use_wake_word
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    entity_category: config
+    on_turn_on:
+      - lambda: id(assist).set_use_wake_word(true);
+      - if:
+          condition:
+            not:
+              - voice_assistant.is_running
+          then:
+            - voice_assistant.start_continuous
+      # - homeassistant.service:
+      #     service: tts.edge_tts_say
+      #     data:
+      #       entity_id: "${media_player_entity}"
+      #       message: "Фраза активации включена"
+            
+    on_turn_off:
+      - voice_assistant.stop
+      - lambda: id(assist).set_use_wake_word(false);
+      # - homeassistant.service:
+      #     service: tts.edge_tts_say
+      #     data:
+      #       entity_id: "${media_player_entity}"
+      #       message: "Фраза активации выключена"
+
+
+number:
+  - platform: template
+    name: "Громкость внешнего динамика"
+    icon: mdi:speaker-message
+    id: volume_level
+    min_value: 0
+    max_value: 100
+    step: 1
+    mode: slider
+    optimistic: true
+    initial_value: 50
+    restore_value: true
+    unit_of_measurement: "%"
+    entity_category: config
+    on_value:
+      then:
+        - homeassistant.service:
+            service: media_player.volume_set
+            data:
+              volume_level: !lambda 'return id(volume_level).state / 100;'
+              entity_id: "${media_player_entity}"
+
+  - platform: template
+    name: "Громкость внутреннего динамика"
+    icon: mdi:speaker-message
+    id: volume_level_in
+    min_value: 0
+    max_value: 100
+    step: 1
+    mode: slider
+    optimistic: true
+    initial_value: 100
+    restore_value: true
+    unit_of_measurement: "%"
+    entity_category: config
+    on_value:
+      then:
+        -  speaker.volume_set: !lambda 'return x / 100;'
+
+# Button Reboot
+button:
+  - platform: restart
+    name: "Reboot"
+    id: reboot_button
+    
+script:
+  - id: control_leds_dial_touched
+    mode: restart
+    then:
+      - lambda: |-
+          auto brightness = std::max(id(led_ww).current_values.get_brightness(), 0.2f);
+          id(led_ww).turn_on()
+            .set_brightness(brightness)
+            .set_effect("Volume Display")
+            .perform();
+      - delay: 5s
+      - light.turn_off: led_ww

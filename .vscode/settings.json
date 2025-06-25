@@ -1,0 +1,6 @@
+{
+    "esphome.dashboardUri": "http://192.168.1.102:6052/",
+    "esphome.validator": "local",
+    "editor.defaultFormatter": "ESPHome.esphome-vscode",
+    "notebook.defaultFormatter": "ESPHome.esphome-vscode"
+}

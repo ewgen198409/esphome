@@ -84,6 +84,6 @@
           ]
 
   - file: "fonts/DS-DIGI.ttf"
-    id: digital_36
-    size: 36
+    id: digital_38
+    size: 38
     bpp: 4

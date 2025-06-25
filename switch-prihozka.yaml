@@ -19,8 +19,8 @@ ota:
 
 wifi:
   networks:
-    - ssid: !secret wifi_ssid
-      password: !secret wifi_password
+    - ssid: IoT_Office
+      password: "9514210798"
     - ssid: Keenetic-Home
       password: "9994554500"
 
@@ -31,8 +31,12 @@ wifi:
 captive_portal:
 
 udp:
-  binary_sensors:
-    - binary_switch_1
+  id: udp_hub
+
+packet_transport:
+  - platform: udp
+    binary_sensors:
+      - binary_switch_1
 
 web_server:
   port: 80
@@ -52,6 +56,7 @@ time:
 button:
   - platform: restart
     name: Restart 
+    id: reboot
 
 text_sensor:
   - platform: wifi_info
@@ -81,7 +86,7 @@ sensor:
     address: 0xedf6bbbd0164ff28
     name: Температура в прихожей
     id: sensor_prihozka_temp
-    update_interval: 1s
+    update_interval: 10s
     unit_of_measurement: "°C"
     icon: mdi:thermometer
     device_class: "temperature"
@@ -205,11 +210,17 @@ binary_sensor:
 
       # long press    
       - timing:
-          - ON for at least 1.5s
+          - ON for at least 1.0s
         then:
           - light.turn_off: prih_right_lamp
           - light.turn_off: prih_left_lamp
           - light.turn_on: led_light_lamp
+
+      # long press    reboot
+      - timing:
+          - ON for at least 10s
+        then:
+          - button.press: reboot
 
 
       # # triple click               |     Задействован 
@@ -247,7 +258,7 @@ binary_sensor:
           
       # long press    
       - timing:
-          - ON for at least 1.5s
+          - ON for at least 1.0s
         then:
           - light.turn_off: holl_right_lamp
           - light.turn_off: holl_left_lamp

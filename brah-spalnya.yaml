@@ -23,10 +23,12 @@ ota:
   
 wifi:
   networks:
-    - ssid: !secret wifi_ssid
-      password: !secret wifi_password
+    - ssid: WiFi_IoT
+      password: "ewgeniy507388"
     - ssid: Keenetic-Home
       password: "9994554500"
+    - ssid: IoT_Office
+      password: "9514210798"
   use_address: brah-spalnya.local
   # manual_ip:
   #   static_ip: 192.168.1.126
@@ -39,9 +41,13 @@ wifi:
     password: "BKjXhbhhYvcb"
 
 udp:
-  binary_sensors:
-    - binary_switch_1
-    - binary_switch_2
+  id: udp_hub
+
+packet_transport:
+  - platform: udp
+    binary_sensors:
+      - binary_switch_1
+      - binary_switch_2
 
 text_sensor:
   - platform: libretiny
@@ -55,7 +61,7 @@ text_sensor:
       name: SSID
 
 binary_sensor:
-  - platform: udp
+  - platform: packet_transport
     provider: light-spalnya
     id: binary_switch_spalnya
     remote_id: binary_switch

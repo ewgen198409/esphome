@@ -1,21 +1,85 @@
 {
-    // See https://go.microsoft.com/fwlink/?LinkId=733558
-    // for the documentation about the tasks.json format
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "echo",
+            "label": "ESPHome: Скомпилировать активный файл",
             "type": "shell",
-            "command": "echo Hello"
+            "command": "esphome compile ${file}",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "new"
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            }
+        },
+        {
+            "label": "ESPHome: Загрузить активный файл",
+            "type": "shell",
+            "command": "esphome upload ${file}",
+            "group": "build",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new"
+            },
+            "dependsOn": "ESPHome: Скомпилировать активный файл",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            }
+        },
+        {
+            "label": "ESPHome: Логи активного файла",
+            "type": "shell",
+            "command": "esphome logs ${file}",
+            "isBackground": true,
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "new"
+            },
+            "options": {
+                "cwd": "${workspaceFolder}"
+            }
+        },
+        {
+            "label": "ESPHome: Очистить файлы сборки активного файла",
+            "type": "shell",
+            "command": "esphome clean ${file}",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new"
+            },
+            "options": {
+                "cwd": "${workspaceFolder}"
+            }
+        },
+        {
+            "label": "ESPHome: Проверить активный файл",
+            "type": "shell",
+            "command": "esphome config ${file}",
+            "group": "none",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new"
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            }
         },
         {
             "type": "esphome",
             "problemMatcher": [],
-            "label": "ESPHome: Upload OTA",
-            "group": {
-                "kind": "build",
-                "isDefault": true
-            }
+            "label": "ESPHome: Upload OTA"
         }
     ]
 }
