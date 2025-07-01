@@ -7,24 +7,26 @@ esphome:
 esp32:
   board: esp32-c3-devkitm-1
   framework:
-    type: esp-idf
-  # framework:
-  #   type: esp-idf
-  #   version: 4.4.8
-  #   platform_version: 5.4.0
+    type: arduino
+    # Указываем версию Arduino framework для ESP32-C3
+    # version: 3.2.0
+    # platform_version: 5.4.1
 
-# Enable logging
+# Включаем логирование
 logger:
+  level: INFO
 
-# Enable Home Assistant API
+# Включаем Home Assistant API
 api:
   encryption:
     key: "c+M3yRoST8qnH2fFAmCj9SJ3ZdECgc8o5/cZEGsKWBg="
 
+# Обновления по воздуху
 ota:
   - platform: esphome
     password: "312f283a0164fce9b713ecd13a3cf624"
 
+# Настройки WiFi
 wifi:
   networks:
     - ssid: "IoT_Office"
@@ -34,101 +36,103 @@ wifi:
 
   fast_connect: false
   power_save_mode: none
+  # Действия при подключении к WiFi
   on_connect:
     then:
       - if:
           condition:
-              # Проверяем, что переключатель "rtttl_mute_switch" находится во включенном состоянии
+            # Проверяем, что переключатель звука включен
             switch.is_on: rtttl_mute_switch
           then:
             - rtttl.play: 'wifi_connect:d=16,o=6,b=100:e,g'
+      # Индикация подключения светодиодами
       - lambda: |-
           id(led_ww).turn_on().set_brightness(1.0).set_rgb(1.0, 1.0, 0).set_effect("scan").perform();
       - delay: 2s
       - lambda: |-
           id(led_ww).turn_off().perform();
 
+# Настройки глубокого сна
 deep_sleep:
   id: deep_sleep_1
   wakeup_pin:
-    number: 5
+    number: GPIO5
     allow_other_uses: true
   wakeup_pin_mode: KEEP_AWAKE
 
+# Настройка выходного пина для звукового сигнала
 output:
   - platform: ledc
     pin: GPIO10
     inverted: false
     id: rtttl_out
 
-  
+# Компонент для воспроизведения мелодий RTTTL
 rtttl:
   output: rtttl_out
 
-
+# Настройка I2S аудио интерфейса
 i2s_audio:
-  i2s_lrclk_pin: GPIO3   #WS/LRC
-  i2s_bclk_pin: GPIO2    #SCK/BCLK
+  i2s_lrclk_pin: GPIO3   # WS/LRC пин
+  i2s_bclk_pin: GPIO2    # SCK/BCLK пин
 
+# Настройка микрофона
 microphone:
   - platform: i2s_audio
     id: esp32_microphone
-    i2s_din_pin: GPIO4    #SD
+    i2s_din_pin: GPIO4    # SD пин
     adc_type: external
     pdm: false
     channel: left
     bits_per_sample: 32bit
     sample_rate: 16000
 
-speaker:
+# Настройка медиаплеера (замена speaker)
+media_player:
   - platform: i2s_audio
     id: esp32_mplayer
+    name: "Alexa Speaker"
     dac_type: external
-    i2s_mode: primary
-    buffer_duration: 1s
-    i2s_dout_pin: GPIO8     #DIN
+    i2s_dout_pin: GPIO8   # DIN пин
 
-# media_player:
-#   - platform: speaker
-#     name: "Speaker Media Player"
-#     id: speaker_media_player_id
-#     announcement_pipeline:
-#         speaker: esp32_mplayer
-#         num_channels: 1
-#         format: WAV
-
+# Настройка голосового помощника
 voice_assistant:
   id: assist
   microphone: esp32_microphone
-  speaker: esp32_mplayer
+  media_player: esp32_mplayer  # Используем media_player вместо speaker
   use_wake_word: false
-  noise_suppression_level: 2    #2
-  auto_gain: 20dBFS             #31dBFS
-  volume_multiplier: 7.0        #2.5
+  noise_suppression_level: 2
+  auto_gain: 20dBFS
+  volume_multiplier: 7.0
 
+  # Действия при обнаружении фразы активации
   on_wake_word_detected:
     then:
       - if:
           condition:
-              # Проверяем, что переключатель "rtttl_mute_switch" находится во включенном состоянии
             switch.is_on: rtttl_mute_switch
           then:
             - rtttl.play: 'short_scale_up:d=32,o=5,b=100:c,d,e,f,g'
 
-  on_tts_stream_start:
-    - lambda: |-
-        id(led_ww).turn_on().set_brightness(1.0).set_rgb(0, 1.0, 0).set_effect("scan").perform();
+  # # Индикация начала воспроизведения TTS
+  # on_tts_stream_start:
+  #   - lambda: |-
+  #       id(led_ww).turn_on().set_brightness(1.0).set_rgb(0, 1.0, 0).set_effect("scan").perform();
   
-  on_tts_stream_end:
-    - lambda: |-
-        id(led_ww).turn_off().perform();
+  # # Индикация окончания потока TTS
+  # on_tts_stream_end:
+  #   - lambda: |-
+  #       id(led_ww).turn_off().perform();
 
+  # Действия по завершении TTS
   on_tts_end:
     - if:
         condition:
           switch.is_on: use_voice_speack
         then:
-          - speaker.mute_on: esp32_mplayer
+          - media_player.volume_set:
+              id: esp32_mplayer
+              volume: 0.0
           - homeassistant.service:
               service: media_player.play_media
               data:
@@ -136,6 +140,7 @@ voice_assistant:
                 media_content_type: audio/mpeg
                 entity_id: "${media_player_entity}"
 
+  # Действия при подключении клиента
   on_client_connected:
     - if:
         condition:
@@ -143,6 +148,7 @@ voice_assistant:
         then:
           - voice_assistant.start_continuous
 
+  # Действия при отключении клиента
   on_client_disconnected:
     - if:
         condition:
@@ -150,18 +156,23 @@ voice_assistant:
         then:
           - voice_assistant.stop
 
+  # Действия по завершении работы
   on_end:
     - if:
         condition:
           switch.is_off: use_voice_speack
         then:
-          speaker.mute_off: esp32_mplayer
+          - media_player.volume_set:
+              id: esp32_mplayer
+              volume: !lambda 'return id(volume_level_in).state / 100.0;'
 
+  # Индикация режима прослушивания
   on_listening:
     - light.turn_on:
         id: led_ww           
         effect: "Smooth Center Pulse" 
 
+  # Индикация ошибки
   on_error:
     - rtttl.play: 'error_signal:d=16,o=5,b=100:c#,c,b_4'
     - lambda: |-
@@ -170,28 +181,26 @@ voice_assistant:
     - lambda: |-
         id(led_ww).turn_off().perform();
 
+  # Действия при запуске таймера
   on_timer_started:
     then:
-      # Action to perform when a timer starts (e.g., play a sound, turn on a light)
-      - rtttl.play: 'short_scale_up:d=32,o=5,b=100:e,g,c6' # Example: play a short tone
+      - rtttl.play: 'short_scale_up:d=32,o=5,b=100:e,g,c6'
 
+  # Действия при завершении таймера
   on_timer_finished:
     then:
-      # Action to perform when a timer finishes (e.g., play an alarm, announce the timer name)
-      - rtttl.play: 'alarm:d=16,o=5,b=100:c6,g,c6,g,c6,g' # Example: play an alarm sound
+      - rtttl.play: 'alarm:d=16,o=5,b=100:c6,g,c6,g,c6,g'
 
+  # Действия каждую секунду для активных таймеров
   on_timer_tick:
     then:
-      # Action to perform every second while timers are active
-      # You can use this to update a display, or for subtle feedback
       - lambda: |-
-          // Example: print remaining time for all active timers
-          for (auto& timer : timers) {
-            ESP_LOGV("timer", "Timer '%s' remaining: %d seconds", timer.name().c_str(), timer.remaining_seconds());
-          }
+          // Логирование оставшегося времени для всех активных таймеров
+          ESP_LOGV("timer", "Проверка активных таймеров");
 
+# Настройка двоичных сенсоров (кнопки)
 binary_sensor:
-  # Кнопка "Гровкость выше"
+  # Кнопка "Громкость выше" (GPIO7)
   - platform: gpio
     pin:
       number: GPIO7
@@ -201,34 +210,37 @@ binary_sensor:
         pullup: true
     name: "Button 1"
     internal: true
-    on_click: # This will trigger immediately when the button is pressed
+    # Звук при нажатии кнопки
+    on_click:
       then:
         - if:
             condition:
-              # Проверяем, что переключатель "rtttl_mute_switch" находится во включенном состоянии
               switch.is_on: rtttl_mute_switch
             then:
-              - rtttl.play: 'button_click:d=32,o=6,b=100:c' # Play the button click sound
+              - rtttl.play: 'button_click:d=32,o=6,b=100:c'
+    # Обработка одиночного клика
     on_multi_click:
-      # one click
       - timing:
         - ON for at most 0.5s
         - OFF for at least 0.5s
         then:
+        # Увеличиваем громкость на 10%
         - lambda: |-
-            auto vol = id(esp32_mplayer).get_volume();
+            auto vol = id(esp32_mplayer).volume;
             if (vol < 1.0) {
-              id(esp32_mplayer).set_volume(vol + 0.1);
+              auto call = id(esp32_mplayer).make_call();
+              call.set_volume(vol + 0.1);
+              call.perform();
             }
-        # устанавливаем ползунок громкости
+        # Обновляем ползунок громкости в интерфейсе
         - lambda: |-
             auto volind = id(volume_level_in).make_call();
-            volind.set_value(id(esp32_mplayer).get_volume() * 100);
+            volind.set_value(id(esp32_mplayer).volume * 100);
             volind.perform();
-        # Скрипт светодиодов
+        # Запускаем скрипт индикации
         - script.execute: control_leds_dial_touched
 
-  # Кнопка "Вызов"
+  # Кнопка "Вызов голосового помощника" (GPIO6)
   - platform: gpio
     pin:
       number: GPIO6
@@ -238,16 +250,16 @@ binary_sensor:
         pullup: true
     name: "Button 2"
     internal: true
-    on_click: # This will trigger immediately when the button is pressed
+    # Звук при нажатии
+    on_click:
       then:
         - if:
             condition:
-              # Проверяем, что переключатель "rtttl_mute_switch" находится во включенном состоянии
               switch.is_on: rtttl_mute_switch
             then:
-              - rtttl.play: 'button_click:d=32,o=6,b=100:c' # Play the button click sound
+              - rtttl.play: 'button_click:d=32,o=6,b=100:c'
     on_multi_click:
-      # one click
+      # Одиночный клик - запуск голосового помощника
       - timing:
         - ON for at most 0.5s
         - OFF for at least 0.5s
@@ -256,14 +268,13 @@ binary_sensor:
           - lambda: |-
               if (!id(use_wake_word).state) {
                 auto call = id(led_ww).make_call();
-                call.set_state(true);  // важно — явно включить
+                call.set_state(true);
                 call.set_rgb(0.3, 0.3, 0.7);
                 call.set_brightness(0.6);
                 call.set_effect("fast pulse");
                 call.perform();
               }
-
-      # double click    
+      # Двойной клик - переключение режима фразы активации    
       - timing:
           - ON for at most 0.5s
           - OFF for at most 0.5s
@@ -272,8 +283,7 @@ binary_sensor:
         then:
           - switch.toggle: use_wake_word
 
-
-  # кнопка выкл
+  # Кнопка выключения/сна (GPIO5)
   - platform: gpio
     pin:
       number: GPIO5
@@ -284,16 +294,16 @@ binary_sensor:
         pulldown: true
     name: "Button 3"
     internal: true
-    on_click: # This will trigger immediately when the button is pressed
+    # Звук при нажатии
+    on_click:
       then:
         - if:
             condition:
-              # Проверяем, что переключатель "rtttl_mute_switch" находится во включенном состоянии
               switch.is_on: rtttl_mute_switch
             then:
-              - rtttl.play: 'button_click:d=32,o=6,b=100:c' # Play the button click sound
+              - rtttl.play: 'button_click:d=32,o=6,b=100:c'
     on_multi_click:
-      # long press    
+      # Длительное нажатие - переход в глубокий сон    
       - timing:
           - ON for at least 2s
         then:
@@ -301,9 +311,7 @@ binary_sensor:
           - delay: 2s
           - deep_sleep.enter: deep_sleep_1
 
-
-
-  # Кнопка "Гровкость ниже"
+  # Кнопка "Громкость ниже" (GPIO9)
   - platform: gpio
     pin:
       number: GPIO9
@@ -313,34 +321,37 @@ binary_sensor:
         pullup: true
     name: "Button 4"
     internal: true
-    on_click: # This will trigger immediately when the button is pressed
+    # Звук при нажатии
+    on_click:
       then:
         - if:
             condition:
-              # Проверяем, что переключатель "rtttl_mute_switch" находится во включенном состоянии
               switch.is_on: rtttl_mute_switch
             then:
-              rtttl.play: 'button_click:d=32,o=6,b=100:c' # Play the button click sound
-
+              - rtttl.play: 'button_click:d=32,o=6,b=100:c'
     on_multi_click:
-      # one click
+      # Одиночный клик - уменьшение громкости
       - timing:
         - ON for at most 0.5s
         - OFF for at least 0.5s
         then:
+        # Уменьшаем громкость на 10%
         - lambda: |-
-            auto vol = id(esp32_mplayer).get_volume();
+            auto vol = id(esp32_mplayer).volume;
             if (vol > 0.0) {
-              id(esp32_mplayer).set_volume(vol - 0.1);
+              auto call = id(esp32_mplayer).make_call();
+              call.set_volume(vol - 0.1);
+              call.perform();
             }
-        # устанавливаем ползунок громкости
+        # Обновляем ползунок громкости в интерфейсе
         - lambda: |-
             auto volind = id(volume_level_in).make_call();
-            volind.set_value(id(esp32_mplayer).get_volume() * 100);
+            volind.set_value(id(esp32_mplayer).volume * 100);
             volind.perform();
-        # Скрипт светодиодов
+        # Запускаем скрипт индикации
         - script.execute: control_leds_dial_touched
 
+# Настройка светодиодной ленты
 light:
   - platform: esp32_rmt_led_strip
     id: led_ww
@@ -348,7 +359,9 @@ light:
     pin: GPIO1
     num_leds: 4
     chipset: ws2812
+    rmt_channel: 0 # Добавлена обязательная опция rmt_channel
     name: "on board light"
+    # Различные световые эффекты
     effects:
       - addressable_color_wipe:
           name: "color wipe"
@@ -360,6 +373,7 @@ light:
           max_brightness: 100%
       - addressable_scan:
           name: "scan"
+      # Эффект плавной пульсации от центра
       - addressable_lambda:
           name: "Smooth Center Pulse"
           update_interval: 50ms
@@ -379,9 +393,6 @@ light:
             // Период пульсации в миллисекундах (1 секунда полный цикл)
             const int pulse_period = 1000;
             
-            // Цикл смены цветов (3 секунды - по 1 секунде на каждый цвет)
-            const int color_cycle_period = 3000;
-            
             // Определяем текущий цвет на основе времени
             int color_phase = (millis() / pulse_period) % 3;
             Color effect_color;
@@ -389,10 +400,10 @@ light:
               case 0: effect_color = Color(0, 0, 255);     break; // Синий
               case 1: effect_color = Color(0, 255, 0);     break; // Зеленый  
               case 2: effect_color = Color(255, 255, 0);   break; // Желтый
-              default: effect_color = Color(0, 0, 255);    break; // Синий по умолчанию
+              default: effect_color = Color(0, 0, 255);    break;
             }
             
-            // Получаем текущее время в цикле (0-1999 мс)
+            // Получаем текущее время в цикле (0-999 мс)
             int time_in_cycle = millis() % pulse_period;
             
             // Преобразуем в значение от 0 до 1 для синуса
@@ -404,7 +415,7 @@ light:
             // Задержка между центром и краями (в радианах)
             const float delay_offset = 3.14159f / 4.0f; // 45 градусов задержки
             
-            // Сначала сбрасываем все светодиоды
+            // Сбрасываем все светодиоды
             for (int i = 0; i < 4; i++) {
               it[i] = Color::BLACK;
             }
@@ -441,7 +452,8 @@ light:
                 (uint8_t)(effect_color.b * brightness)
               );
             }
-
+            
+      # Эффект отображения уровня громкости
       - addressable_lambda:
           name: "Volume Display"
           update_interval: 30ms
@@ -459,7 +471,7 @@ light:
             if (first_run) {
               last_update_time = current_time;
               first_run = false;
-              smoothed_volume = id(esp32_mplayer).get_volume();
+              smoothed_volume = id(esp32_mplayer).volume;
             }
             
             float delta_time = (current_time - last_update_time) / 1000.0f; // в секундах
@@ -469,23 +481,23 @@ light:
             if (delta_time > 0.1f) delta_time = 0.1f;
             
             // Получаем текущее значение громкости
-            float volume = id(esp32_mplayer).get_volume();
+            float volume = id(esp32_mplayer).volume;
             target_volume = volume;
             
             // Плавное изменение громкости (сглаживание)
-            float smoothing_factor = 12.0f; // Увеличена скорость сглаживания
+            float smoothing_factor = 12.0f;
             smoothed_volume += (target_volume - smoothed_volume) * smoothing_factor * delta_time;
             
             // Ограничиваем значение
             if (smoothed_volume < 0.0f) smoothed_volume = 0.0f;
             if (smoothed_volume > 1.0f) smoothed_volume = 1.0f;
 
-            // Улучшенные цвета для лучшего восприятия
-            Color blue_color(30, 144, 255);    // Dodger Blue
-            Color green_color(50, 205, 50);    // Lime Green  
-            Color orange_color(255, 165, 0);   // Orange
-            Color red_color(220, 20, 60);      // Crimson
-            Color purple_color(138, 43, 226);  // Blue Violet
+            // Цвета для разных уровней громкости
+            Color blue_color(30, 144, 255);    // Синий
+            Color green_color(50, 205, 50);    // Зеленый  
+            Color orange_color(255, 165, 0);   // Оранжевый
+            Color red_color(220, 20, 60);      // Красный
+            Color purple_color(138, 43, 226);  // Фиолетовый
 
             // Функция преобразования логического индекса в физический
             auto logical_to_physical = [](int logical_idx) -> int {
@@ -508,13 +520,13 @@ light:
               );
             };
             
-            // Функция получения цвета по уровню громкости с плавными переходами
+            // Функция получения цвета по уровню громкости
             auto get_volume_color = [&](float vol) -> Color {
               if (vol <= 0.0f) {
                 return Color::BLACK;
               } else if (vol <= 0.25f) {
                 float t = vol / 0.25f;
-                return lerp_color(blue_color, green_color, t * 0.8f + 0.2f); // Добавляем базовую интенсивность
+                return lerp_color(blue_color, green_color, t * 0.8f + 0.2f);
               } else if (vol <= 0.5f) {
                 float t = (vol - 0.25f) / 0.25f;
                 return lerp_color(green_color, orange_color, t);
@@ -526,11 +538,11 @@ light:
               }
             };
 
-            // Обработка отключенного звука с элегантным пульсированием
+            // Обработка отключенного звука с пульсированием
             if (smoothed_volume <= 0.01f) {
               float pulse_cycle = (current_time % 3000) / 3000.0f; // 3 секунды цикл
               float pulse_intensity = (sin(pulse_cycle * 2 * 3.14159f) + 1.0f) / 2.0f;
-              pulse_intensity = pulse_intensity * pulse_intensity; // Квадратичная кривая для мягкости
+              pulse_intensity = pulse_intensity * pulse_intensity;
               
               Color muted_color = Color(
                 (uint8_t)(purple_color.r * pulse_intensity * 0.4f),
@@ -546,9 +558,9 @@ light:
 
             // Обработка максимальной громкости с предупреждающим миганием
             if (smoothed_volume >= 0.95f) {
-              float blink_cycle = (current_time % 800) / 800.0f; // 0.8 секунды цикл
+              float blink_cycle = (current_time % 800) / 800.0f;
               float blink_intensity = (sin(blink_cycle * 6 * 3.14159f) + 1.0f) / 2.0f;
-              blink_intensity = 0.5f + blink_intensity * 0.5f; // От 50% до 100% яркости
+              blink_intensity = 0.5f + blink_intensity * 0.5f;
               
               Color warning_color = Color(
                 (uint8_t)(red_color.r * blink_intensity),
@@ -562,30 +574,27 @@ light:
               return;
             }
 
-            // Вычисляем точное количество активных светодиодов
+            // Вычисляем количество активных светодиодов
             float precise_leds = smoothed_volume * 4.0f;
             int full_leds = (int)precise_leds;
             float partial_led = precise_leds - full_leds;
 
-            // Улучшенное плавное затухание
-            float fade_speed = 8.0f; // Увеличена скорость отклика
+            // Плавное затухание
+            float fade_speed = 8.0f;
             for (int logical_idx = 0; logical_idx < 4; logical_idx++) {
               float target_brightness = 0.0f;
               
               if (logical_idx < full_leds) {
                 target_brightness = 1.0f;
               } else if (logical_idx == full_leds && partial_led > 0.0f) {
-                // Плавная кривая для частичного светодиода
                 target_brightness = partial_led * partial_led * (3.0f - 2.0f * partial_led);
               }
               
-              // Плавное изменение яркости с разной скоростью для включения/выключения
+              // Плавное изменение яркости
               float current_fade = fade_positions[logical_idx];
               if (target_brightness > current_fade) {
-                // Быстрое включение
                 fade_positions[logical_idx] += (target_brightness - current_fade) * fade_speed * 1.5f * delta_time;
               } else {
-                // Медленное выключение для более плавного эффекта
                 fade_positions[logical_idx] += (target_brightness - current_fade) * fade_speed * 0.8f * delta_time;
               }
               
@@ -594,14 +603,14 @@ light:
               if (fade_positions[logical_idx] > 1.0f) fade_positions[logical_idx] = 1.0f;
             }
 
-            // Применяем цвета к светодиодам с улучшенной яркостью
+            // Применяем цвета к светодиодам
             for (int logical_idx = 0; logical_idx < 4; logical_idx++) {
               int physical_idx = logical_to_physical(logical_idx);
               
-              if (fade_positions[logical_idx] > 0.005f) { // Уменьшен порог для более мягких переходов
+              if (fade_positions[logical_idx] > 0.005f) {
                 Color base_color = get_volume_color(smoothed_volume);
                 
-                // Применяем гамма-коррекцию для более естественного восприятия яркости
+                // Применяем гамма-коррекцию
                 float gamma_corrected = pow(fade_positions[logical_idx], 0.8f);
                 
                 Color final_color = Color(
@@ -616,7 +625,9 @@ light:
               }
             }
 
+# Настройка переключателей
 switch:
+  # Переключатель использования внешнего динамика
   - platform: template
     icon: mdi:volume-high
     name: "Use external speaker"
@@ -625,6 +636,7 @@ switch:
     restore_mode: RESTORE_DEFAULT_OFF
     entity_category: config
 
+  # Переключатель звуковых уведомлений
   - platform: template
     name: "Sound RTTTL Buzzer"
     icon: mdi:volume-high
@@ -633,6 +645,7 @@ switch:
     restore_mode: RESTORE_DEFAULT_ON
     entity_category: config
 
+  # Переключатель фразы активации
   - platform: template
     name: "Use wake word"
     icon: mdi:microphone-outline
@@ -640,6 +653,7 @@ switch:
     optimistic: true
     restore_mode: RESTORE_DEFAULT_ON
     entity_category: config
+    # Включение фразы активации
     on_turn_on:
       - lambda: id(assist).set_use_wake_word(true);
       - if:
@@ -648,23 +662,14 @@ switch:
               - voice_assistant.is_running
           then:
             - voice_assistant.start_continuous
-      # - homeassistant.service:
-      #     service: tts.edge_tts_say
-      #     data:
-      #       entity_id: "${media_player_entity}"
-      #       message: "Фраза активации включена"
-            
+    # Выключение фразы активации        
     on_turn_off:
       - voice_assistant.stop
       - lambda: id(assist).set_use_wake_word(false);
-      # - homeassistant.service:
-      #     service: tts.edge_tts_say
-      #     data:
-      #       entity_id: "${media_player_entity}"
-      #       message: "Фраза активации выключена"
 
-
+# Настройка числовых параметров
 number:
+  # Громкость внешнего динамика
   - platform: template
     name: "Громкость внешнего динамика"
     icon: mdi:speaker-message
@@ -686,6 +691,7 @@ number:
               volume_level: !lambda 'return id(volume_level).state / 100;'
               entity_id: "${media_player_entity}"
 
+  # Громкость внутреннего динамика
   - platform: template
     name: "Громкость внутреннего динамика"
     icon: mdi:speaker-message
@@ -701,7 +707,10 @@ number:
     entity_category: config
     on_value:
       then:
-        -  speaker.volume_set: !lambda 'return x / 100;'
+        - lambda: |-
+            auto call = id(esp32_mplayer).make_call(); // Создаем объект вызова
+            call.set_volume(id(volume_level_in).state / 100.0); // Используем set_volume на объекте вызова
+            call.perform(); // Выполняем вызов
 
 # Button Reboot
 button:
