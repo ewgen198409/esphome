@@ -35,8 +35,13 @@ packet_transport:
   - platform: udp
     sensors:
       - garage_temp
-      - co_sensor
+      - co_concentration
+      - co_percentage
       - garage_hum
+    binary_sensors:
+      - fan_state_sensor
+      - lamp_state_sensor      # Добавьте эту строку
+
 
 wifi:
   networks:
@@ -50,10 +55,10 @@ wifi:
   # если отвалился wifi - перезагружать каждый час
   reboot_timeout: 60min
 
-external_components:
-  source: github://ewgen198409/esphome/components
-  components: [mq]
-  refresh: 0s
+# external_components:
+#   source: github://ewgen198409/esphome/components
+#   components: [mq]
+#   refresh: 0s
 
 captive_portal:
 
@@ -84,6 +89,55 @@ binary_sensor:
         pullup: true
     name: "Warning CO input"
 
+  - platform: packet_transport
+    provider: pcf8574
+    remote_id: fan_state_trigger  # Принимаем состояние от pcf8574
+    id: fan_state_receiver
+    name: "Fan State Receiver"
+    internal: true
+    on_state:
+      then:
+        - if:
+            condition:
+              lambda: 'return x;'
+            then:
+              - fan.turn_on: relay_fan_garage
+            else:
+              - fan.turn_off: relay_fan_garage
+
+  - platform: template
+    id: fan_state_sensor
+    name: "Fan State Sensor"
+    internal: true
+    lambda: |-
+      return id(relay_fan_garage).state;
+      
+  # Приемник для управления лампой
+  - platform: packet_transport
+    provider: pcf8574
+    remote_id: lamp_control_trigger
+    id: lamp_control_receiver
+    name: "Lamp Control Receiver"
+    internal: true
+    on_state:
+      then:
+        - if:
+            condition:
+              lambda: 'return x;'
+            then:
+              - light.turn_on: garage_door_lamp
+            else:
+              - light.turn_off: garage_door_lamp
+
+  # Сенсор состояния лампы для публикации
+  - platform: template
+    id: lamp_state_sensor
+    name: "Lamp State Sensor"
+    internal: true
+    lambda: |-
+      return id(garage_door_lamp).current_values.is_on();
+      
+      
 switch:
   - platform: template
     name: "Авто режим вентиляции по CO"
@@ -129,31 +183,84 @@ sensor:
       filters:
         - lambda: return x - 4;
       unit_of_measurement: °C
+      accuracy_decimals: 1
     humidity:
       id: garage_hum
       name: "Garage Humidity"
       unit_of_measurement: '% RH'
-    update_interval: 5s
+      accuracy_decimals: 1
+    update_interval: 60s
 
   - platform: wifi_signal
     name: WiFi Strength
     update_interval: 60s
 
-  - platform: mq
-    model: MQ7
+  - platform: adc
     pin: A0
-    update_interval: 2s
-    sensor_lpg:
-      name: Sensor LPG
-    sensor_ch4:
-      name: Sensor CH4
-    sensor_co:
-      name: Sensor CO
-      id: co_sensor
-    sensor_alcohol:
-      name: Sensor Alcohol
-    sensor_h2:
-      name: Sensor H2
+    name: "MQ7 FC-22 Raw Value"
+    id: mq7_raw
+    update_interval: 20s
+    accuracy_decimals: 3
+    filters:
+      - sliding_window_moving_average:
+          window_size: 15
+          send_every: 5
+
+  # Напряжение с модуля FC-22
+  - platform: template
+    name: "MQ7 FC-22 Voltage"
+    id: mq7_voltage
+    unit_of_measurement: "V"
+    accuracy_decimals: 3
+    lambda: |-
+      return id(mq7_raw).state * 3.3;
+    update_interval: 20s
+
+  # Концентрация CO для модуля FC-22
+  - platform: template
+    name: "CO Concentration"
+    id: co_concentration
+    unit_of_measurement: "ppm"
+    accuracy_decimals: 1
+    lambda: |-
+      return (id(mq7_voltage).state*1024/5);
+    update_interval: 30s
+
+  # Процентное соотношение концентрации CO
+  - platform: template
+    name: "CO Percentage"
+    id: co_percentage
+    unit_of_measurement: "%"
+    accuracy_decimals: 3
+    lambda: |-
+      float co_ppm = id(co_concentration).state;
+      
+      // Преобразуем ppm в проценты
+      // 1% = 10,000 ppm
+      float co_percent = co_ppm / 10000.0;
+      
+      // Ограничиваем диапазон
+      if (co_percent < 0) co_percent = 0;
+      if (co_percent > 100) co_percent = 100;
+      
+      return co_percent;
+    update_interval: 30s
+
+  # - platform: mq
+  #   model: MQ7
+  #   pin: A0
+  #   update_interval: 2s
+  #   sensor_lpg:
+  #     name: Sensor LPG
+  #   sensor_ch4:
+  #     name: Sensor CH4
+  #   sensor_co:
+  #     name: Sensor CO
+  #     id: co_sensor
+  #   sensor_alcohol:
+  #     name: Sensor Alcohol
+  #   sensor_h2:
+  #     name: Sensor H2
 
 globals:
   - id: upper_threshold
@@ -188,7 +295,7 @@ interval:
             lambda: 'return id(auto_mode);'  # Проверка: включён ли автоматический режим
           then:
             - lambda: |-
-                float co = id(co_sensor).state;
+                float co = id(co_percentage).state;
                 if (co > id(upper_threshold)) {
                   auto call = id(relay_fan_garage).turn_on();
                   call.perform();

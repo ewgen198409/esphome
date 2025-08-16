@@ -1,0 +1,183 @@
+esphome:
+  name: electro-count
+
+esp8266:
+  board: esp01_1m
+  restore_from_flash: true
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: "bjXzBhKYl6Z3Xq4Wvx11we/qf3jaxBIQ0DtppE8aTJI="
+
+ota:
+  - platform: esphome
+    password: "a728660b82b9235615d09f5be4847d98"
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  ap:
+    ssid: "Electro-Count Hotspot"
+    password: "00000000"
+
+captive_portal:
+
+# Веб-сервер для просмотра состояния
+web_server:
+  port: 80
+
+time:
+  - platform: sntp
+    id: ntp_time
+    timezone: Asia/Omsk
+    servers:
+      - 192.168.1.1
+
+# Реле на GPIO1 и GPIO3
+switch:
+  - platform: gpio
+    pin: 1
+    name: "Реле 1"
+    id: relay1
+    icon: mdi:power-socket-eu
+    
+  - platform: gpio
+    pin: 3
+    name: "Реле 3"
+    id: relay3
+    icon: mdi:power-socket-eu
+
+# Глобальная переменная для хранения общего потребления
+globals:
+  - id: total_energy
+    type: float
+    restore_value: yes
+    initial_value: '0.0'
+
+# Основной датчик для подсчета импульсов и расчета мощности
+sensor:
+  # Используем pulse_meter - более точный и эффективный способ
+  - platform: pulse_meter
+    pin:
+      number: 2
+      mode: INPUT_PULLUP
+      inverted: true
+    name: "Текущая мощность"
+    id: power_meter
+    unit_of_measurement: 'W'
+    device_class: power
+    state_class: measurement
+    accuracy_decimals: 0
+    icon: mdi:flash
+    internal_filter: 50ms
+    timeout: 2min  # После 2 минут без импульсов показывать 0W
+    filters:
+      # Конвертируем импульсы/мин в Ватты
+      # 1600 импульсов = 1 kWh
+      # 1 импульс = 1/1600 kWh = 0.625 Wh
+      # Если получаем X импульсов в минуту, то мощность = X * 0.625 Wh/мин * 60 мин/ч = X * 37.5 W
+      - multiply: 37.5  # (1000Wh/kWh / 1600 imp/kWh * 60 min/h)
+    
+    # Подсчет общего потребления энергии
+    total:
+      name: "Общее потребление"
+      id: total_consumption
+      device_class: energy
+      state_class: total_increasing
+      accuracy_decimals: 3
+      unit_of_measurement: 'kWh'
+      icon: mdi:lightning-bolt
+      filters:
+        # Конвертируем импульсы в kWh
+        - multiply: 0.000625  # (1 kWh / 1600 импульсов)
+        # Добавляем к сохраненному значению при перезагрузке
+        - lambda: |-
+            static bool first_run = true;
+            if (first_run) {
+              first_run = false;
+              return x + id(total_energy);
+            }
+            id(total_energy) = x;
+            return x;
+      on_value:
+        then:
+          - lambda: |-
+              id(total_energy) = x;
+
+  # Счетчик импульсов для отладки
+  - platform: template
+    name: "Счетчик импульсов1"
+    id: pulse_counter
+    accuracy_decimals: 0
+    unit_of_measurement: "pulses"
+    icon: mdi:counter
+    lambda: |-
+      return id(total_consumption).state * 1600;
+    update_interval: 10s
+
+  # Датчик WiFi сигнала
+  - platform: wifi_signal
+    name: "WiFi сигнал"
+    id: wifi_signal_db
+    internal: true
+    update_interval: 60s
+
+  - platform: copy # Reports the WiFi signal strength in %
+    source_id: wifi_signal_db
+    icon: mdi:wifi
+    name: "WiFi Percent"
+    filters:
+      - lambda: return min(max(2 * (x + 100.0), 0.0), 100.0);
+    unit_of_measurement: "%"
+    entity_category: "diagnostic"
+    device_class: ""
+
+  # Время работы устройства
+  - platform: uptime
+    name: "Время работы"
+    update_interval: 60s
+
+# Кнопки управления
+button:
+  - platform: template
+    name: "Сброс счетчика"
+    icon: mdi:restart
+    on_press:
+      then:
+        - lambda: |-
+            // Сбрасываем глобальную переменную
+            id(total_energy) = 0.0;
+            // Сбрасываем внутренний счетчик pulse_meter
+            id(total_consumption).publish_state(0.0);
+            ESP_LOGI("main", "Счетчик сброшен");
+
+  - platform: restart
+    name: "Reboot"
+    id: reboot_button
+
+# Текстовые сенсоры для информации
+text_sensor:
+  - platform: wifi_info
+    ip_address:
+      name: IP Address
+      icon: mdi:ip-outline
+    ssid:
+      name: SSID
+      icon: mdi:identifier
+
+  # Сенсор времени
+  - platform: template
+    name: "Текущее время"
+    icon: mdi:clock-outline
+    id: local_time
+    lambda: |-
+      char str[6];
+      time_t currTime = id(ntp_time).now().timestamp;
+      strftime(str, sizeof(str), "%H:%M", localtime(&currTime));
+      return { str };
+    update_interval: 60s

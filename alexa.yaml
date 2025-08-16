@@ -78,6 +78,7 @@ microphone:
     pdm: false
     channel: left
     bits_per_sample: 32bit
+    bits_per_channel: 32bit
     sample_rate: 16000
 
 speaker:
@@ -97,15 +98,37 @@ speaker:
 #         num_channels: 1
 #         format: WAV
 
+
+# micro_wake_word:
+#   microphone: esp32_microphone 
+#   stop_after_detection: true
+#   models:
+#     - id: alexa_model
+#       model: github://esphome/micro-wake-word-models/models/v2/alexa.json
+#       probability_cutoff: 0.6
+#   vad:
+#     model: github://esphome/micro-wake-word-models/models/v2/vad.json
+#   on_wake_word_detected:
+#     then:
+#       - if:
+#           condition:
+#               # Проверяем, что переключатель "rtttl_mute_switch" находится во включенном состоянии
+#             switch.is_on: rtttl_mute_switch
+#           then:
+#             - rtttl.play: 'short_scale_up:d=32,o=5,b=100:c,d,e,f,g'
+#       # Запускаем голосовой помощник после обнаружения ключевого слова
+#       - voice_assistant.start:
+#           wake_word: !lambda return wake_word;
+
+
 voice_assistant:
   id: assist
   microphone: esp32_microphone
   speaker: esp32_mplayer
-  use_wake_word: false
+  use_wake_word: true
   noise_suppression_level: 2    #2
   auto_gain: 20dBFS             #31dBFS
   volume_multiplier: 7.0        #2.5
-
   on_wake_word_detected:
     then:
       - if:
@@ -252,23 +275,38 @@ binary_sensor:
         - ON for at most 0.5s
         - OFF for at least 0.5s
         then:
-          - voice_assistant.start        
-          - lambda: |-
-              if (!id(use_wake_word).state) {
-                auto call = id(led_ww).make_call();
-                call.set_state(true);  // важно — явно включить
-                call.set_rgb(0.3, 0.3, 0.7);
-                call.set_brightness(0.6);
-                call.set_effect("fast pulse");
-                call.perform();
-              }
+          - if:
+              condition:
+                lambda: return id(use_wake_word).state;                // если use wake word включен
+              then:                                                    # тогда сигнал ошибки
+                - delay: 0.5s
+                - lambda: |-
+                    auto call = id(led_ww).make_call();
+                    call.set_state(true);  // важно — явно включить
+                    call.set_rgb(1.0, 0.0, 0.0);
+                    call.set_brightness(0.6);
+                    call.set_effect("fast pulse");
+                    call.perform();
 
-      # double click    
+                - rtttl.play: 'error_signal:d=16,o=5,b=100:c#,c,b_4'
+                - delay: 2s
+                - lambda: |-
+                    id(led_ww).turn_off().perform();
+              else:                                                        # если слово пробуждения выключено
+                - rtttl.play: 'short_scale_up:d=32,o=5,b=100:c,d,e,f,g'
+                - delay: 1s
+                - voice_assistant.start                                    # тогда вызываем voice assistant
+                - lambda: |-
+                    auto call = id(led_ww).make_call();
+                    call.set_state(true);  // важно — явно включить
+                    call.set_rgb(0.3, 0.3, 0.7);
+                    call.set_brightness(0.6);
+                    call.set_effect("fast pulse");
+                    call.perform();
+                    
+      # long press    
       - timing:
-          - ON for at most 0.5s
-          - OFF for at most 0.5s
-          - ON for at most 0.5s
-          - OFF for at least 0.5s
+          - ON for at least 3s
         then:
           - switch.toggle: use_wake_word
 
@@ -295,7 +333,7 @@ binary_sensor:
     on_multi_click:
       # long press    
       - timing:
-          - ON for at least 2s
+          - ON for at least 3s
         then:
           - rtttl.play: 'scale_down:d=32,o=5,b=100:g,f,e,d,c'
           - delay: 2s
@@ -347,6 +385,8 @@ light:
     rgb_order: GRB
     pin: GPIO1
     num_leds: 4
+    rmt_symbols: 48
+    use_psram: false
     chipset: ws2812
     name: "on board light"
     effects:
@@ -641,6 +681,8 @@ switch:
     restore_mode: RESTORE_DEFAULT_ON
     entity_category: config
     on_turn_on:
+      # - micro_wake_word.start
+      - rtttl.play: 'short_scale_up:d=32,o=5,b=100:c,d,e,f,g'
       - lambda: id(assist).set_use_wake_word(true);
       - if:
           condition:
@@ -655,6 +697,9 @@ switch:
       #       message: "Фраза активации включена"
             
     on_turn_off:
+      # - micro_wake_word.stop
+      # - voice_assistant.stop
+      - rtttl.play: 'scale_down:d=32,o=5,b=100:g,f,e,d,c'
       - voice_assistant.stop
       - lambda: id(assist).set_use_wake_word(false);
       # - homeassistant.service:

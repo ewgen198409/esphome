@@ -30,6 +30,7 @@ ota:
 
 wifi:
   output_power: 12dB
+  power_save_mode: none
   networks:
     - ssid: WiFi_IoT
       password: "ewgeniy507388"

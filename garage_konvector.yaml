@@ -14,6 +14,14 @@ esp8266:
   restore_from_flash: true
   
 udp:
+  id: udp_hub
+
+packet_transport:
+  - platform: udp
+    # Бинарные сенсоры, которые мы публикуем для других устройств
+    binary_sensors:
+      - konvector_state
+
 logger:
 
 api:
@@ -72,17 +80,17 @@ time:
 
 button:
   - platform: restart
-    name: Restart ${name}
+    name: Restart
 
 text_sensor:
   - platform: wifi_info
     ip_address:
-      name: IP Address ${name}
+      name: IP Address
     ssid:
-      name: SSID ${name}  
+      name: SSID
 
   - platform: template
-    name: "Current time ${name}"
+    name: "Current time"
     lambda: |-
       char str[17];
       time_t currTime = id(ntp_time).now().timestamp;
@@ -92,7 +100,7 @@ text_sensor:
 
 light:
   - platform: monochromatic
-    name: "Blue LED ${name}"
+    name: "Blue LED"
     output: blue_led
     internal: true
 
@@ -123,39 +131,62 @@ binary_sensor:
       mode: INPUT_PULLUP
       inverted: True
     name: "Button ${name}"
+    internal: true
 
+
+# Сенсор для UDP climate ==========================================================================================
+  # Бинарный сенсор для публикации состояния термостата
+  - platform: template
+    id: konvector_state
+    name: Konvector state
+    internal: false
+    lambda: |-
+      if (id(thermostat_garage_konvector).mode == climate::CLIMATE_MODE_HEAT) {
+        return true;  // ON когда в режиме HEAT
+      } else {
+        return false; // OFF для всех других режимов
+      }
+ 
+  # Бинарный сенсор для приема команды с pcf8574
+  - platform: packet_transport
+    id: konvector_command
+    internal: true
+    remote_id: konvector_command
+    provider: pcf8574
+    on_press:
+      then:
+        - lambda: |-
+            auto call = id(thermostat_garage_konvector).make_call();
+            call.set_mode(climate::CLIMATE_MODE_HEAT);
+            call.perform();
+    on_release:
+      then:
+        - lambda: |-
+            auto call = id(thermostat_garage_konvector).make_call();
+            call.set_mode(climate::CLIMATE_MODE_OFF);
+            call.perform();
+
+# =================================================================================================================
 sensor:
-  - platform: uptime
-    name: Uptime ${name}
-
-  - platform: udp
+  - platform: packet_transport
     provider: co2-sensor-garage
     remote_id: garage_temp
     id: garage_temp
     internal: true
 
-  - platform: copy
+  - platform: wifi_signal
+    name: WiFi Strength
+    update_interval: 60s
+    id: wifi_signal_db
+
+  - platform: copy # Reports the WiFi signal strength in %
     source_id: wifi_signal_db
-    name: "WiFi Signal ${name}"
+    name: "WiFi Signal Percent"
     filters:
       - lambda: return min(max(2 * (x + 100.0), 0.0), 100.0);
     unit_of_measurement: "%"
     entity_category: "diagnostic"
     device_class: ""
-
-  - platform: wifi_signal
-    name: WiFi Strength ${name}
-    update_interval: 60s
-    id: wifi_signal_db
-
-    # Общее время наработки конвектора
-  - platform: duty_time
-    id: convector_work_time
-    name: Конвектор Время работы
-    icon: mdi:alarm-plus
-    update_interval: 1s
-    restore: true
-    lambda: "return id(relay).state;"
 
 climate:
   - platform: thermostat
@@ -177,3 +208,8 @@ climate:
       - switch.turn_on: relay
     idle_action:
       - switch.turn_off: relay
+    on_state:
+      then:
+        - binary_sensor.template.publish:
+            id: konvector_state
+            state: !lambda 'return x.mode == climate::CLIMATE_MODE_HEAT;'

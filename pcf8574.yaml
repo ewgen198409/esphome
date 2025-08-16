@@ -1,0 +1,1251 @@
+substitutions:
+  temp_sensor_calibrate: -0.5
+  auto_light_timer: 300000  # таймер автоподсветки 5min
+
+
+esphome:
+  name: pcf8574
+  platformio_options:
+    board_build.flash_mode: dio
+    board_build.ldscript: eagle.flash.4m1m.ld  # <-- Кастомный скрипт 1.5mb-flash, 1.5mb-OTA 
+    # board_upload.maximum_size: 1572864
+    # board_build.f_flash: 40000000L
+    board_build.f_cpu: 80000000L
+
+esp8266:
+  board: nodemcuv2
+  restore_from_flash: true
+
+# Enable logging
+logger:
+  level: DEBUG
+  logs:
+    sensor: WARN
+    text_sensor: WARN
+
+
+debug:
+  update_interval: 5s
+
+# Enable Home Assistant API
+api:
+  reboot_timeout: 0s
+  batch_delay: 200ms
+
+ota:
+  - platform: esphome
+
+wifi:
+  networks:
+    - ssid: "IoT_Office"
+      id: wifi_id
+      password: "9514210798"
+    - ssid: OpenWrt_Garage
+      password: "9514210798"
+
+  ap:
+    ssid: "Garage Fallback Hotspot"
+    password: "00000000"
+
+captive_portal:
+
+text_sensor:
+  - platform: wifi_info
+    ip_address:
+      name: IP Address
+      icon: mdi:ip-outline
+    ssid:
+      name: SSID
+      icon: mdi:identifier
+
+  # Сенсор времени ESPHOME
+  # Этот сенсор отображает текущее время в формате ЧЧ:ММ.
+  - platform: template
+    name: "Текущее время"
+    icon: mdi:clock-outline
+    id: local_time
+    lambda: |-
+      char str[6];
+      time_t currTime = id(ntp_time).now().timestamp;
+      strftime(str, sizeof(str), "%H:%M", localtime(&currTime));
+      return { str };
+    update_interval: 60s
+
+status_led:
+  pin:
+    number: GPIO15
+    mode:
+      output: true
+    inverted: false
+
+udp:
+  id: udp_hub
+
+packet_transport:
+  - platform: udp
+    binary_sensors:
+      - fan_state_trigger                 # Публикуем этот сенсор
+      - lamp_control_trigger
+      - konvector_command
+      - kotel_command
+    sensors:
+      - sensor_garage_temp
+
+# ================= TIME ====================================
+time:
+  - platform: sntp
+    id: ntp_time
+    timezone: Asia/Omsk
+    servers:
+      - 192.168.1.1
+
+# Button Reboot
+button:
+  - platform: restart
+    name: "Reboot"
+    id: reboot_button
+
+one_wire:
+  - platform: gpio
+    pin: GPIO3
+
+i2c:
+  - id: pcf_bus
+    sda: GPIO5
+    scl: GPIO4
+    scan: true
+    frequency: 100kHz
+
+pcf8574:
+  - id: 'pcf8574_hub'
+    address: 0x20
+    pcf8575: false
+
+# Display ==========================================================================================
+display:
+  - platform: lcd_pcf8574
+    dimensions: 16x2
+    address: 0x27
+    update_interval: 100ms
+    lambda: |-
+      // Приоритет 1: Сообщения сигнализации
+      if (id(alarm_message) != 0) {
+        if (id(alarm_message) == 1) {
+          // Получаем текущие значения в локальные переменные
+          static int wave_pos_value = 0;
+          static uint32_t last_update_value = 0;
+
+          // Обновляем позицию волны каждые 100мс (защита от переполнения)
+          uint32_t current_time = millis();
+          if ((uint32_t)(current_time - last_update_value) > 100) {
+            wave_pos_value = (wave_pos_value + 1) % 8;
+            last_update_value = current_time;
+          }
+
+          // Эффект волны для "Arming!!"
+          const char text[] = "Arming!!!";
+          for (uint8_t i = 0; i < 9; i++) {
+            uint8_t pos = (wave_pos_value + i) % 9;  // Используем локальную переменную
+            char c = pos < 4 ? text[i] : ' ';
+            char buf[2] = {c, '\0'};
+            it.print(4 + i, 0, buf);
+          }
+
+          // Расчет оставшегося времени (защита от переполнения)
+          uint32_t now = millis();
+          uint32_t remaining_seconds = 0;
+          if ((int32_t)(id(arming_timer_end) - now) > 0) {
+            remaining_seconds = (id(arming_timer_end) - now) / 1000;
+            // Ограничиваем максимальное время 99 минут
+            if (remaining_seconds > 5940) remaining_seconds = 5940;
+          }
+          
+          // Безопасное форматирование времени с проверками границ
+          uint8_t minutes = remaining_seconds / 60;
+          uint8_t seconds = remaining_seconds % 60;
+          // Защита от переполнения
+          if (minutes > 99) minutes = 99;
+          if (seconds > 59) seconds = 59;
+
+          char timer_str[6];
+          timer_str[0] = '0' + (minutes / 10);
+          timer_str[1] = '0' + (minutes % 10);
+          timer_str[2] = ':';
+          timer_str[3] = '0' + (seconds / 10);
+          timer_str[4] = '0' + (seconds % 10);
+          timer_str[5] = '\0';
+          
+          it.print(5, 1, timer_str);
+          
+        } else if (id(alarm_message) == 2) {
+          it.print(3, 0, "Disarmed!!!");
+          it.print(0, 1, "                ");
+        }
+        return;
+      }
+
+      // Эффект перелистывания (только для автоматического возврата) =====================================================================
+      if (id(transition_active)) {
+        static uint8_t anim_step = 0;
+        
+        // Очищаем экран в начале анимации
+        if (anim_step == 0) {
+          it.clear();
+        }
+        
+        // Постепенно рисуем основной экран
+        if (anim_step < 16) {
+          // Верхняя строка (время)
+          if (anim_step >= 4) {
+            char time_str[9];
+            id(ntp_time).now().strftime(time_str, sizeof(time_str), "%H:%M:%S");
+            uint8_t visible_chars = (anim_step - 3) > 8 ? 8 : (anim_step - 3);
+            for (uint8_t i = 0; i < visible_chars; i++) {
+              if (4 + i < 16) {
+                char buf[2] = {time_str[i], '\0'};
+                it.print(4 + i, 0, buf);
+              }
+            }
+          }
+          
+          // Нижняя строка (температура и CO)
+          if (anim_step >= 1) {
+            float temp = id(display_state) ? id(temp_sensor_co2).state : id(sensor_garage_temp).state;
+            char temp_str[16];
+            snprintf(temp_str, sizeof(temp_str), "t%d:%.1f\xDF", id(display_state) ? 1 : 2, temp);
+            uint8_t temp_visible = anim_step > 8 ? 8 : anim_step;
+            for (uint8_t i = 0; i < temp_visible; i++) {
+              if (i < 16) {
+                char buf[2] = {temp_str[i], '\0'};
+                it.print(i, 1, buf);
+              }
+            }
+          }
+          
+          if (anim_step >= 9) {
+            char co_str[16];
+            snprintf(co_str, sizeof(co_str), "co:%.1f%%", id(co_sensor_garage).state);
+            uint8_t co_visible = (anim_step - 8) > 5 ? 5 : (anim_step - 8);
+            for (uint8_t i = 0; i < co_visible; i++) {
+              if (9 + i < 16) {
+                char buf[2] = {co_str[i], '\0'};
+                it.print(9 + i, 1, buf);
+              }
+            }
+          }
+        }
+        
+        anim_step++;
+        if (anim_step >= 16) {
+          id(transition_active) = false;
+          id(menu_active) = false;
+          anim_step = 0;
+        }
+        return;
+      }
+      // ========================================================================================================
+      if (id(menu_active)) {
+        int index = id(menu_index);
+        std::string item_name;
+        std::string item_state;
+        
+        // Прокручиваемое меню с выделением активного пункта
+        for (int i = 0; i < 2; i++) {
+          int item_index = (index / 2) * 2 + i;
+          if (item_index > 12) continue; // Всего 12 пунктов
+          
+          switch (item_index) {
+            case 0:
+              item_name = "Light 1";
+              item_state = id(one_lamp).current_values.is_on() ? "ON" : "OFF";
+              break;
+            case 1:
+              item_name = "Light 2";
+              item_state = id(two_lamp).current_values.is_on() ? "ON" : "OFF";
+              break;
+            case 2:
+              item_name = "Light 3";
+              item_state = id(three_lamp).current_values.is_on() ? "ON" : "OFF";
+              break;
+            case 3:
+              item_name = "All Light";
+              // Определяем состояние группы света
+              {
+                bool light1 = id(one_lamp).current_values.is_on();
+                bool light2 = id(two_lamp).current_values.is_on();
+                bool light3 = id(three_lamp).current_values.is_on();
+                if (light1 && light2 && light3) {
+                  item_state = "ON";
+                } else if (!light1 && !light2 && !light3) {
+                  item_state = "OFF";
+                } else {
+                  item_state = "Mix";
+                }
+              }
+              break;
+            case 4:
+              item_name = "PWM Light";
+              item_state = id(pwm_lights).current_values.is_on() ? "ON" : "OFF";
+              break;
+            case 5:  // Пункт "Cover"
+              item_name = "Cover";
+              // Используем бинарный датчик напрямую
+              if (id(binary_cover).state) {
+                item_state = "Open";
+              } else {
+                item_state = "Closed";
+              }
+              break;
+            case 6:
+              item_name = "Lock";
+              item_state = id(garage_lock).state == lock::LOCK_STATE_LOCKED ? "Locked" : "Unlocked";
+              break;
+            case 7:
+              item_name = "Fan";
+              item_state = id(fan_state_trigger).state ? "ON" : "OFF";
+              break;
+            case 8:
+              item_name = "Lamp Cover";
+              item_state = id(lamp_control_trigger).state ? "ON" : "OFF";
+              break;
+            case 9:
+              item_name = "Conv_1";
+              item_state = id(conv_1).state ? "ON" : "OFF";
+              break;
+            case 10:
+              item_name = "Conv_2";
+              item_state = id(conv_2).state ? "ON" : "OFF";
+              break;
+            case 11:
+              item_name = "AutoLight";
+              item_state = id(auto_pwm_enabled) ? "ON" : "OFF";
+              break;
+            case 12:
+              item_name = "Reboot";
+              item_state = "press";
+              break;
+            default:
+              item_name = "Error";
+              item_state = "";
+
+          }
+          
+          // Выделение активного пункта
+          if (item_index == index) {
+            it.printf(0, i, ">%s: %s", item_name.c_str(), item_state.c_str());
+          } else {
+            it.printf(1, i, "%s: %s", item_name.c_str(), item_state.c_str());
+          }
+        }
+      } else {
+        // Обычный режим
+        it.strftime(4, 0, "%H:%M:%S", id(ntp_time).now());
+
+        // В зависимости от состояния display_state, выводим разные датчики
+        if (id(display_state)) {
+            it.printf(0, 1, "t1:%.1f\xDF", id(temp_sensor_co2).state);
+        } else {
+            it.printf(0, 1, "t2:%.1f\xDF", id(sensor_garage_temp).state);
+        }
+
+        it.printf(9, 1, "co:%.1f%%", id(co_sensor_garage).state);
+      }
+
+
+# ===========================================================================================================
+# Temperature sensor ==========================================================================================
+sensor:
+  # DS18B20
+  - platform: dallas_temp
+    address: 0xcd654d190264ff28
+    name: "Garage Temperature"
+    id: sensor_garage_temp
+    update_interval: 60s
+    unit_of_measurement: "°C"
+    icon: mdi:thermometer
+    device_class: "temperature"
+    state_class: "measurement"
+    accuracy_decimals: 1
+    filters:
+      - lambda: return x ${temp_sensor_calibrate};
+
+# Temperature sensor с устройства CO2_Garage ========================================================================
+  - platform: packet_transport
+    provider: co2-sensor-garage
+    id: temp_sensor_co2
+    remote_id: garage_temp
+    internal: true
+    unit_of_measurement: "°C"
+    icon: mdi:thermometer
+    device_class: "temperature"
+    state_class: "measurement"
+    accuracy_decimals: 1
+
+# CO sensor garage ==================================================================================================
+  - platform: packet_transport
+    provider: co2-sensor-garage
+    id: co_sensor_garage
+    name: Co Garage
+    remote_id: co_percentage
+    icon: mdi:molecule-co
+    internal: false
+    unit_of_measurement: "%"
+    accuracy_decimals: 1
+# ===================================================================================================================
+# ============================================================================================================
+  - platform: wifi_signal
+    name: WiFi
+    update_interval: 60s
+    id: wifi_signal_db
+    internal: true
+
+  - platform: copy # Reports the WiFi signal strength in %
+    source_id: wifi_signal_db
+    icon: mdi:wifi
+    name: "WiFi Percent"
+    filters:
+      - lambda: return min(max(2 * (x + 100.0), 0.0), 100.0);
+    unit_of_measurement: "%"
+    entity_category: "diagnostic"
+    device_class: ""
+# ==================================================================================================================
+  - platform: debug
+    free:
+      name: "Heap Free"
+      icon: mdi:memory-arrow-down
+    fragmentation:
+      name: "Heap Fragmentation"
+      icon: mdi:memory
+    cpu_frequency:
+      name: "CPU Frequency"
+      icon: mdi:cpu-32-bit
+# ==============================================================================================================
+
+  # Фиктивные сенсоры для приёма данных от co2-sensor-garage чтобы избегать ошибок [W][packet_transport:501]: Unknown key B в логе ============================
+  - platform: packet_transport
+    provider: co2-sensor-garage
+    remote_id: co_concentration
+    id: dummy_co_concentration
+    internal: true
+
+
+  - platform: packet_transport
+    provider: co2-sensor-garage
+    remote_id: garage_hum
+    id: dummy_garage_hum
+    internal: true
+# ==================================================================================================================================================================
+
+switch:
+# Cover relay ===================================================================================
+  - platform: gpio
+    name: "garage_cover_relay"
+    id: garage_door_relay_switch
+    internal: true
+    pin:
+      pcf8574: pcf8574_hub
+      number: 1
+      mode:
+        output: true
+      inverted: true
+    on_turn_on:
+      - delay: 500ms
+      - switch.turn_off: garage_door_relay_switch
+
+# ==============================================================================================
+# Lock relay ==============================================================================
+  - platform: gpio
+    name: "garage_lock_relay"
+    id: garage_door_relay_lock
+    internal: true
+    pin:
+      pcf8574: pcf8574_hub
+      number: 3
+      mode:
+        output: true
+      inverted: true
+    on_turn_on:
+      - delay: 500ms
+      - switch.turn_off: garage_door_relay_lock
+
+  - platform: gpio
+    name: "garage_lock_relay"
+    id: garage_door_relay_unlock
+    internal: true
+    pin:
+      pcf8574: pcf8574_hub
+      number: 2
+      mode:
+        output: true
+      inverted: true
+    on_turn_on:
+      - delay: 500ms
+      - switch.turn_off: garage_door_relay_unlock
+
+  - platform: gpio
+    name: "Sirena relay"
+    icon: mdi:bullhorn-outline
+    id: sirena_relay
+    internal: false
+    pin:
+      pcf8574: pcf8574_hub
+      number: 5
+      mode:
+        output: true
+      inverted: false
+# ============================================================================================
+# switch on ventilation ===========================================================================
+  - platform: template
+    name: "Garage Fan Remote Control"
+    id: garage_fan_remote
+    optimistic: true
+    internal: true
+    turn_on_action:
+      - binary_sensor.template.publish:
+          id: fan_state_trigger
+          state: ON
+    turn_off_action:
+      - binary_sensor.template.publish:
+          id: fan_state_trigger
+          state: OFF
+# ===============================================================================================
+# garage door lamp =================================================================================
+  - platform: template
+    name: "Garage Lamp Remote Control"
+    id: garage_lamp_remote
+    optimistic: true
+    internal: true
+    turn_on_action:
+      - binary_sensor.template.publish:
+          id: lamp_control_trigger
+          state: ON
+    turn_off_action:
+      - binary_sensor.template.publish:
+          id: lamp_control_trigger
+          state: OFF
+# ===================================================================================================
+# Выключатели конвекторов ===========================================================================
+# Выключатели, которые меняют состояние бинарных сенсоров-команд
+  - platform: template
+    name: "Конвектор (управление)"
+    internal: true
+    id: conv_1
+    turn_on_action:
+      - binary_sensor.template.publish:
+          id: konvector_command
+          state: ON
+    turn_off_action:
+      - binary_sensor.template.publish:
+          id: konvector_command
+          state: OFF
+
+  - platform: template
+    name: "Котел (управление)"
+    internal: true
+    id: conv_2
+    turn_on_action:
+      - binary_sensor.template.publish:
+          id: kotel_command
+          state: ON
+    turn_off_action:
+      - binary_sensor.template.publish:
+          id: kotel_command
+          state: OFF
+# =============================================================================================================
+# Автоматическая подсветка =========================================================================================
+  - platform: template
+    name: "Auto Light on Sensors"
+    id: auto_pwm_switch
+    icon: "mdi:auto-mode"
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF
+    turn_on_action:
+      - globals.set:
+          id: auto_pwm_enabled
+          value: 'true'
+    turn_off_action:
+      - globals.set:
+          id: auto_pwm_enabled
+          value: 'false'
+# ====================================================================================================================================
+
+cover:
+  - platform: template
+    device_class: garage
+    id: "side_garage_door_cover"
+    name: "Garage Cover"
+    has_position: false
+    assumed_state: false
+    optimistic: true
+    # Используем lambda для определения состояния на основе бинарного датчика
+    lambda: |-
+      if (id(binary_cover).state) {
+        return cover::COVER_OPEN;
+      } else {
+        return cover::COVER_CLOSED;
+      }
+    open_action:
+      - switch.turn_on: garage_door_relay_switch
+    close_action:
+      - switch.turn_on: garage_door_relay_switch
+# ==========================================================================================================
+
+lock:
+  - platform: template
+    name: "Garage door Lock"
+    id: garage_lock
+    optimistic: true
+    lock_action:
+      - if:
+          condition:
+            lambda: 'return !id(door_switch).state;'  # Проверка, что дверь закрыта
+          then:
+            - switch.turn_on: garage_door_relay_lock
+            - delay: 3s
+            - lock.template.publish:
+                id: garage_lock
+                state: LOCKED
+          else:
+            - logger.log:
+                level: WARN
+                format: "Cannot lock - door is open!"
+            - delay: 2s
+            - lock.template.publish:
+                id: garage_lock
+                state: UNLOCKED
+
+    unlock_action:
+      - switch.turn_on: garage_door_relay_unlock
+      - delay: 3s
+      - lock.template.publish:
+          id: garage_lock
+          state: UNLOCKED
+
+# ============================================================================================================
+
+output:
+  - id: light_output0
+    platform: gpio
+    pin:
+      pcf8574: pcf8574_hub
+      number: 4
+      mode:
+        output: true
+      inverted: true
+
+  - id: light_output1
+    platform: gpio
+    pin:
+      pcf8574: pcf8574_hub
+      number: 7
+      mode:
+        output: true
+      inverted: true
+
+  - id: light_output2
+    platform: gpio
+    pin:
+      pcf8574: pcf8574_hub
+      number: 0
+      mode:
+        output: true
+      inverted: true
+
+# PWM Output ========================================================================
+  - platform: esp8266_pwm
+    pin: 
+      number: GPIO2
+      inverted: true
+      mode: OUTPUT
+    frequency: 500 Hz
+    id: pwm_output1
+
+# Light`s ==========================================================================
+light:
+  - platform: binary
+    name: Свет 1
+    id: one_lamp
+    output: light_output0
+    icon: mdi:light-flood-down
+    restore_mode: ALWAYS_OFF
+
+  - platform: binary
+    name: Свет 2
+    id: two_lamp
+    output: light_output1
+    icon: mdi:light-flood-down
+    restore_mode: ALWAYS_OFF
+
+  - platform: binary
+    name: Свет 3
+    id: three_lamp
+    output: light_output2
+    icon: mdi:light-flood-down
+    restore_mode: ALWAYS_OFF
+
+# Light PWM ==============================================================================
+  - platform: monochromatic
+    name: "PWM Lights"
+    icon: mdi:theme-light-dark
+    id: pwm_lights
+    output: pwm_output1
+    on_turn_off:
+      - globals.set:
+          id: pwm_auto_off_time
+          value: '0'
+# ========================================================================================
+
+# Button =================================================================================
+binary_sensor:
+  - platform: gpio
+    pin:
+      number: GPIO0
+      inverted: true
+      mode: INPUT_PULLUP
+    id: binary_switch
+    internal: true
+    filters:
+      - delayed_on: 50ms
+      - delayed_off: 50ms
+    # Конфигурация multi_click
+    on_multi_click:
+      # Single click (одиночное нажатие)
+      - timing:
+          - ON for at most 400ms
+          - OFF for at least 300ms
+        then:
+          - light.turn_on: one_lamp
+
+      # Double click (двойное нажатие)
+      - timing:
+          - ON for at most 400ms
+          - OFF for at most 400ms
+          - ON for at most 400ms
+          - OFF for at least 300ms
+        then:
+          - light.turn_on: two_lamp
+
+      # Triple click (тройное нажатие)
+      - timing:
+          - ON for at most 400ms
+          - OFF for at most 400ms
+          - ON for at most 400ms
+          - OFF for at most 400ms
+          - ON for at most 400ms
+          - OFF for at least 300ms
+        then:
+          - light.turn_on: three_lamp
+
+      - timing:
+          - ON for at least 1s
+        then:
+          - lambda: |-
+              bool light1_on = id(one_lamp).current_values.is_on();
+              bool light2_on = id(two_lamp).current_values.is_on();
+              bool light3_on = id(three_lamp).current_values.is_on();
+              
+              if (light1_on || light2_on || light3_on) {
+                id(one_lamp).turn_off().perform();
+                id(two_lamp).turn_off().perform();
+                id(three_lamp).turn_off().perform();
+              } else {
+                id(one_lamp).turn_on().perform();
+                id(two_lamp).turn_on().perform();
+                id(three_lamp).turn_on().perform();
+              }
+
+# Button Panel ===============================================================================
+  - platform: gpio
+    pin:
+      number: GPIO14
+      inverted: true
+      mode: INPUT_PULLUP
+    id: binary_switch_1
+    internal: true
+    name: Button Panel
+    filters:
+      - delayed_on: 50ms  
+      - delayed_off: 50ms
+    on_multi_click:
+      # Переключение пунктов (удержание 1 секунда)
+      - timing:
+          - ON for at least 1s
+        then:
+          - if:
+              condition:
+                lambda: 'return id(menu_active);'
+              then:
+                - lambda: |-
+                    int index = id(menu_index);
+                    switch (index) {
+                      case 0:
+                        id(one_lamp).toggle().perform();
+                        break;
+                      case 1:
+                        id(two_lamp).toggle().perform();
+                        break;
+                      case 2:
+                        id(three_lamp).toggle().perform();
+                        break;
+                      case 3: // All Light
+                        {
+                          bool all_on = id(one_lamp).current_values.is_on() || 
+                                       id(two_lamp).current_values.is_on() || 
+                                       id(three_lamp).current_values.is_on();
+                          if (all_on) {
+                            id(one_lamp).turn_off().perform();
+                            id(two_lamp).turn_off().perform();
+                            id(three_lamp).turn_off().perform();
+                          } else {
+                            id(one_lamp).turn_on().perform();
+                            id(two_lamp).turn_on().perform();
+                            id(three_lamp).turn_on().perform();
+                          }
+                        }
+                        break;
+                      case 4:
+                        id(pwm_lights).toggle().perform();
+                        break;
+                      case 5:
+                        // Управление воротами
+                        if (id(side_garage_door_cover).is_fully_open()) {
+                          auto call = id(side_garage_door_cover).make_call();
+                          call.set_command_close();
+                          call.perform();
+                        } else {
+                          auto call = id(side_garage_door_cover).make_call();
+                          call.set_command_open();
+                          call.perform();
+                        }
+                        break;
+                      case 6:
+                        // Управление замком
+                        if (id(garage_lock).state == lock::LOCK_STATE_LOCKED) {
+                          id(garage_lock).unlock();
+                        } else {
+                          id(garage_lock).lock();
+                        }
+                        break;
+                      case 7:
+                        // Управление вентиляцией
+                        id(garage_fan_remote).toggle();
+                        break;
+                      case 8:  // Управление лампой
+                        id(garage_lamp_remote).toggle();
+                        break;
+                      case 9:  // Управление конвектором 1
+                        id(conv_1).toggle();
+                        break;
+                      case 10:  // Управление конвектором 2
+                        id(conv_2).toggle();
+                        break;
+                      case 11:  // Новый пункт для Auto PWM
+                        id(auto_pwm_switch).toggle();
+                        break;
+                      case 12:  // Reboot
+                        id(reboot_button).press();
+                        break;
+                    }
+                - globals.set:
+                    id: menu_last_action
+                    value: !lambda |-
+                      return millis();
+
+      # Вход в меню и навигация (короткое нажатие)
+      - timing:
+          - ON for at most 400ms
+          - OFF for at least 200ms
+        then:
+          - if:
+              condition:
+                lambda: 'return !id(menu_active);'
+              then:
+                - globals.set:
+                    id: menu_active
+                    value: 'true'
+                - globals.set:
+                    id: menu_index
+                    value: '0'
+                - globals.set:
+                    id: menu_last_action
+                    value: !lambda |-
+                      return millis();
+              else:
+                - globals.set:
+                    id: menu_index
+                    value: !lambda |-
+                      int index = id(menu_index);
+                      return (index + 1) % 13; // Обновлено до 12 пунктов
+                - globals.set:
+                    id: menu_last_action
+                    value: !lambda |-
+                      return millis();
+
+      # Новый обработчик для сигнализации (удержание 5 секунд)
+      - timing:
+          - ON for at least 5s
+        then:
+          - if:
+              condition:
+                lambda: 'return !id(menu_active);'
+              then:
+                - if:
+                    condition:
+                      lambda: 'return id(alarm_garage).get_state() == 0;'  # 0 = DISARMED
+                    then:
+                      - alarm_control_panel.arm_away:
+                          id: alarm_garage
+                          code: '1984'
+                    else:
+                      - alarm_control_panel.disarm:
+                          id: alarm_garage
+                          code: '1984'
+# ============================================================================
+# Motion sensor ================================================================
+  - platform: gpio
+    pin:
+      number: GPIO13
+      inverted: false
+      mode: INPUT
+    id: binary_motion
+    device_class: "motion"
+    name: Garage Motion Sensor
+    on_state:
+      - if:
+          condition:
+            and:
+              - lambda: 'return x;'
+              - lambda: 'return id(auto_pwm_enabled);'
+              - lambda: 'return !id(pwm_lights).current_values.is_on();'
+              - lambda: 'return !id(one_lamp).current_values.is_on() && 
+                         !id(two_lamp).current_values.is_on() && 
+                         !id(three_lamp).current_values.is_on();'
+              - lambda: 'return id(alarm_garage).get_state() == 0;'
+          then:
+            - light.turn_on: pwm_lights
+            - globals.set:
+                id: pwm_auto_off_time
+                value: !lambda 'return millis() + ${auto_light_timer};'
+# ===============================================================================
+# Cover Sensor ===================================================================
+  - platform: gpio
+    pin:
+      number: GPIO12
+      inverted: false
+      mode: INPUT_PULLUP
+    id: binary_cover
+    internal: true
+    device_class: garage_door
+    name: Garage Cover Sensor
+    on_state:
+      - if:
+          condition:
+            and:
+              - lambda: 'return x;'
+              - lambda: 'return id(auto_pwm_enabled);'
+              - lambda: 'return !id(pwm_lights).current_values.is_on();'
+              - lambda: 'return !id(one_lamp).current_values.is_on() && 
+                         !id(two_lamp).current_values.is_on() && 
+                         !id(three_lamp).current_values.is_on();'
+              - lambda: 'return id(alarm_garage).get_state() == 0;'
+          then:
+            - light.turn_on: pwm_lights
+            - globals.set:
+                id: pwm_auto_off_time
+                value: !lambda 'return millis() + ${auto_light_timer};'
+# =================================================================================
+# Door sensor ===============================================================================
+  - platform: gpio
+    pin:
+      number: GPIO16
+      inverted: false
+      mode: INPUT
+    id: door_switch
+    device_class: door
+    name: "Door Sensor"
+    use_interrupt: false
+    filters:
+      - delayed_on: 50ms
+      - delayed_off: 50ms
+    on_state:
+      - if:
+          condition:
+            and:
+              - lambda: 'return x;'
+              - lambda: 'return id(auto_pwm_enabled);'
+              - lambda: 'return !id(pwm_lights).current_values.is_on();'
+              - lambda: 'return !id(one_lamp).current_values.is_on() && 
+                         !id(two_lamp).current_values.is_on() && 
+                         !id(three_lamp).current_values.is_on();'
+              - lambda: 'return id(alarm_garage).get_state() == 0;'
+          then:
+            - light.turn_on: pwm_lights
+            - globals.set:
+                id: pwm_auto_off_time
+                value: !lambda 'return millis() + ${auto_light_timer};'
+# ======================================================================================================
+# для управления вентиляцией =======================================================
+  - platform: template
+    id: fan_state_trigger
+    name: "Fan State Trigger"
+    internal: true
+    lambda: |-
+      return id(garage_fan_remote).state;
+
+  - platform: packet_transport
+    provider: co2-sensor-garage
+    remote_id: fan_state_sensor
+    id: fan_state_receiver
+    name: "Fan State Receiver"
+    internal: true
+    on_state:
+      then:
+        # Обновляем состояние переключателя
+        - switch.template.publish:
+            id: garage_fan_remote
+            state: !lambda "return x;"
+        # Обновляем триггер
+        - binary_sensor.template.publish:
+            id: fan_state_trigger
+            state: !lambda "return x;"
+# garage door lamp ================================================================================
+  # Триггер для управления лампой
+  - platform: template
+    id: lamp_control_trigger
+    name: "Lamp Control Trigger"
+    internal: true
+    lambda: |-
+      return id(garage_lamp_remote).state;
+
+  # Приемник состояния лампы
+  - platform: packet_transport
+    provider: co2-sensor-garage
+    remote_id: lamp_state_sensor
+    id: lamp_state_receiver
+    name: "Lamp State Receiver"
+    internal: true
+    on_state:
+      then:
+        # Обновляем состояние переключателя
+        - switch.template.publish:
+            id: garage_lamp_remote
+            state: !lambda "return x;"
+        # Обновляем триггер
+        - binary_sensor.template.publish:
+            id: lamp_control_trigger
+            state: !lambda "return x;"
+# =================================================================================================
+# Сенсоры состояния темостатов =============================================================================
+  # === Управляющие сенсоры для отправки команд по Packet Transport ===
+  # Эти сенсоры управляются переключателями ниже и публикуются в сеть.
+  - platform: template
+    id: konvector_command
+    internal: true
+
+  - platform: template
+    id: kotel_command
+    internal: true
+
+  - platform: packet_transport
+    id: thermostat_konvector_state
+    remote_id: konvector_state
+    internal: true
+    provider: garage-konvector
+    on_state:
+        # Обновляем состояние переключателя
+        - switch.template.publish:
+            id: conv_1
+            state: !lambda "return x;"
+        # Обновляем триггер
+        - binary_sensor.template.publish:
+            id: konvector_command
+            state: !lambda "return x;"
+
+  - platform: packet_transport
+    id: thermostat_kotel_state
+    remote_id: kotel_state
+    internal: true
+    provider: garage-kotel
+    # Добавлена логика для синхронизации переключателя
+    on_state:
+        # Обновляем состояние переключателя
+        - switch.template.publish:
+            id: conv_2
+            state: !lambda "return x;"
+        # Обновляем триггер
+        - binary_sensor.template.publish:
+            id: kotel_command
+            state: !lambda "return x;"
+
+# Переменные для меню дисплея ====================================================================
+globals:
+  - id: menu_active
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: menu_index
+    type: int
+    restore_value: no
+    initial_value: '0'
+  - id: menu_last_action
+    type: uint32_t
+    restore_value: no
+    initial_value: '0'
+  # Новая переменная для переключения датчиков температуры
+  - id: display_state
+    type: bool
+    restore_value: no
+    initial_value: 'true'
+  - id: alarm_message
+    type: int
+    restore_value: no
+    initial_value: '0'
+  - id: alarm_message_timer
+    type: uint32_t
+    restore_value: no
+    initial_value: '0'
+
+  - id: arming_timer_end  # Время окончания отсчета
+    type: uint32_t
+    restore_value: no
+    initial_value: '0'
+  - id: transition_active
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+    
+  - id: auto_pwm_enabled
+    type: bool
+    restore_value: yes
+    initial_value: 'true'
+  - id: pwm_auto_off_time
+    type: uint32_t
+    restore_value: no
+    initial_value: '0'
+
+
+# Добавляем интервал для проверки таймаута меню
+interval:
+  - interval: 1s
+    then:
+      - if:
+          condition:
+            or:
+              - and:
+                  - lambda: 'return id(menu_active);'
+                  - lambda: 'return (uint32_t)(millis() - id(menu_last_action)) > 10000;'
+              - and:
+                  - lambda: 'return id(alarm_message) != 0;'
+                  - lambda: 'return (int32_t)(millis() - id(alarm_message_timer)) >= 0;'
+          then:
+            - globals.set:
+                id: transition_active
+                value: 'true'
+            - globals.set:
+                id: menu_last_action
+                value: !lambda 'return millis();'
+            - if:
+                condition:
+                  lambda: 'return id(alarm_message) != 0;'
+                then:
+                  - globals.set:
+                      id: alarm_message
+                      value: '0'
+
+  # Интервал для переключения отображения температуры
+  - interval: 5s
+    then:
+      - globals.set:
+          id: display_state
+          value: !lambda 'return !id(display_state);'
+  
+  # Таймер для автосвета
+  - interval: 1s
+    then:
+      - if:
+          condition:
+            or:
+              # Проверка таймера
+              - and:
+                  - lambda: 'return id(pwm_auto_off_time) != 0;'
+                  - lambda: 'return millis() >= id(pwm_auto_off_time);'
+              # Проверка основных светильников
+              - lambda: 'return id(one_lamp).current_values.is_on() || 
+                         id(two_lamp).current_values.is_on() || 
+                         id(three_lamp).current_values.is_on();'
+          then:
+            - light.turn_off: pwm_lights
+            - globals.set:
+                id: pwm_auto_off_time
+                value: '0'
+
+# =====================================================================================================
+# Alarm ====================================================================================================
+alarm_control_panel:
+  - platform: template
+    name: Alarm Garage
+    id: alarm_garage
+    codes:
+      - "1984"
+      - "5073"
+    pending_time: 30s   # Задержка входа перед срабатыванием тревоги
+    restore_mode: RESTORE_DEFAULT_DISARMED
+    arming_away_time: 60s    # Задержка выхода перед переводом сигнализации в режим охраны.
+    trigger_time: 3min          # время после срабатывания тревоги до сброса в предыдущее состояние, если датчики очищены/выключены
+    binary_sensors:
+      - input: door_switch
+        bypass_auto: true  # Автоматически обходить активные датчики при постановке на охрану
+      - input: binary_cover
+        bypass_auto: true  # Автоматически обходить активные датчики при постановке на охрану
+      - input: binary_motion
+        trigger_mode: delayed_follower
+
+    # При срабатывании сигнализации 
+    on_triggered:
+      then:
+        - switch.turn_on: sirena_relay
+
+    on_cleared:
+      then:
+        - switch.turn_off: sirena_relay
+
+    # При снятии с охраны выключаем сирену и открываем замок
+    on_disarmed:
+      then:
+        - globals.set:
+            id: alarm_message
+            value: '2'
+        - globals.set:
+            id: alarm_message_timer
+            value: !lambda 'return millis() + 10000;'
+        - switch.turn_off: sirena_relay
+        - lock.unlock: garage_lock
+
+
+    on_arming:
+      then:
+        - globals.set:
+            id: alarm_message
+            value: '1'
+        - globals.set:
+            id: alarm_message_timer
+            value: !lambda 'return millis() + 60000UL;'
+        - globals.set:
+            id: arming_timer_end
+            value: !lambda 'return millis() + 60000UL;'  # 60 секунд с защитой от переполнения
+
+    on_armed_away:
+      then:
+        - lock.lock: garage_lock
+        - lambda: |-
+            bool light1_on = id(one_lamp).current_values.is_on();
+            bool light2_on = id(two_lamp).current_values.is_on();
+            bool light3_on = id(three_lamp).current_values.is_on();
+
+            if (light1_on || light2_on || light3_on) {
+              id(one_lamp).turn_off().perform();
+              id(two_lamp).turn_off().perform();
+              id(three_lamp).turn_off().perform();
+            } 
+        - switch.turn_off: garage_lamp_remote
+# =================================================================================================================
