@@ -62,6 +62,7 @@ sensor:
     internal: true
     filters:
       - multiply: 3.3
+      - delta: 0.1  # Обновляем только при изменении на 0.1V
 
   - platform: adc
     id: source_sensor
@@ -228,11 +229,11 @@ binary_sensor:
       - lambda: id(back_to_screensaver).execute();
       - if:
           condition:
-            - lambda: |-
-                  return id(back_light).current_values.get_brightness() <= ${backlight} + 0.05;
+            - lvgl.page.is_showing: page_time
           then:
             - lvgl.widget.show: status_bar
             - lvgl.page.show: page_one
+            - lvgl.widget.focus: spin_down
             - delay: 0.5s
             - lvgl.slider.update:
                 id: slider_light
@@ -251,11 +252,11 @@ binary_sensor:
       - lambda: id(back_to_screensaver).execute();
       - if:
           condition:
-            - lambda: |-
-                  return id(back_light).current_values.get_brightness() <= ${backlight} + 0.05;
+            - lvgl.page.is_showing: page_time
           then:
             - lvgl.widget.show: status_bar
             - lvgl.page.show: page_one
+            - lvgl.widget.focus: spin_down
             - delay: 0.5s
             - lvgl.slider.update:
                 id: slider_light
@@ -271,21 +272,32 @@ binary_sensor:
     filters:
       - delayed_on: 10ms
       - delayed_off: 10ms
-    on_click:
-      - lambda: id(back_to_screensaver).execute();
-      - if:
-          condition:
-            - lambda: |-
-                  return id(back_light).current_values.get_brightness() <= ${backlight} + 0.05;
-          then:
-            - lvgl.widget.show: status_bar
-            - lvgl.page.show: page_one
-            - delay: 0.5s
-            - lvgl.slider.update:
-                id: slider_light
-                value: !lambda return id(set_brghtness);
-            - script.execute: back_to_screensaver
-
+    on_multi_click:
+      # Single click (одиночное нажатие)          пробуждение от сна убрано !!!!!!!!!!!!!!
+      - timing:
+          - ON for at most 400ms
+          - OFF for at least 300ms
+        then:
+          - lambda: id(back_to_screensaver).execute();
+          # - if:
+          #     condition:
+          #       - lvgl.page.is_showing: page_time
+          #       # - lambda: |-
+          #       #       return id(back_light).current_values.get_brightness() <= ${backlight} + 0.05;
+          #     then:
+          #       - lvgl.widget.show: status_bar
+          #       - lvgl.page.show: page_one
+          #       - lvgl.widget.focus: spin_down
+          #       - delay: 0.5s
+          #       - lvgl.slider.update:
+          #           id: slider_light
+          #           value: !lambda return id(set_brghtness);
+          #       - script.execute: back_to_screensaver
+      # long press    
+      - timing:
+          - ON for at least 5s
+        then:
+          - button.press: restart_button
 # ==============================================================================
 
   - platform: status

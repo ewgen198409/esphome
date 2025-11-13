@@ -20,7 +20,7 @@ preferences:
 #   update_interval: 5s
 
 api:
-#  reboot_timeout: 0s
+  reboot_timeout: 0s
   encryption:
     key: "KOWDAA8XBu8jM5F884wvQ6ji5Mhwm2J29yZXx2C9Kko="
 

@@ -10,6 +10,7 @@ esp8266:
 logger:
 
 api:
+  reboot_timeout: 0s
   encryption:
     key: "jer1RLt6wpw9Q2ZnJaq54YHwiTj4vJ9CAsyeJ5U16Jw="
   on_client_connected:

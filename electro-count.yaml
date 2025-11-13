@@ -1,35 +1,79 @@
 esphome:
   name: electro-count
+  on_boot:
+    then:
+      - logger.log: "Boot: restoring pulse counter total from saved global"
+      - pulse_counter.set_total_pulses:
+          id: energy_pulse_counter
+          value: !lambda 'return (int) id(energy_pulses_total);'
+      - delay: 1s
+      - lambda: |-
+          ESP_LOGI("boot", "Восстановлено energy_pulses_total = %.0f, total_energy = %.1f", id(energy_pulses_total), id(total_energy));
 
 esp8266:
-  board: esp01_1m
+  board: nodemcuv2
   restore_from_flash: true
 
-# Enable logging
 logger:
 
-# Enable Home Assistant API
 api:
   encryption:
     key: "bjXzBhKYl6Z3Xq4Wvx11we/qf3jaxBIQ0DtppE8aTJI="
+  reboot_timeout: 15min
+  actions:
+    - action: set_total_energy
+      variables:
+        new_total: float
+      then:
+        - lambda: |-
+            float new_pulses = new_total * 1600;
+            id(energy_pulses_total) = new_pulses;
+            id(total_energy) = new_total;
+            id(last_tariff_energy) = new_total;
+            ESP_LOGI("api", "Установлено общее потребление: %.1f kWh (%.0f импульсов)", new_total, new_pulses);
+        - pulse_counter.set_total_pulses:
+            id: energy_pulse_counter
+            value: !lambda 'return (int) (new_total * 1600);'
+
+    - action: set_tariff_energy
+      variables:
+        day: float
+        night: float
+        peak: float
+      then:
+        - lambda: |-
+            id(total_energy_day) = day;
+            id(total_energy_night) = night;
+            id(total_energy_peak) = peak;
+            id(last_tariff_energy) = id(total_energy);
+            ESP_LOGI("api", "Установлены тарифные значения: День=%.1f, Ночь=%.1f, Пик=%.1f", day, night, peak);
 
 ota:
   - platform: esphome
     password: "a728660b82b9235615d09f5be4847d98"
 
 wifi:
-  ssid: !secret wifi_ssid
-  password: !secret wifi_password
-
+  networks:
+    - ssid: "IoT_Office"
+      id: wifi_id
+      password: "9514210798"
+  fast_connect: true
+  reboot_timeout: 15min
+  power_save_mode: none
   ap:
     ssid: "Electro-Count Hotspot"
     password: "00000000"
 
 captive_portal:
 
-# Веб-сервер для просмотра состояния
 web_server:
   port: 80
+  include_internal: false
+
+sun:
+  latitude: 54.9293
+  longitude: 73.2045
+  id: sun0
 
 time:
   - platform: sntp
@@ -37,147 +81,307 @@ time:
     timezone: Asia/Omsk
     servers:
       - 192.168.1.1
+    on_time_sync:
+      then:
+        - logger.log: "Время синхронизировано"
 
-# Реле на GPIO1 и GPIO3
+# ВНИМАНИЕ: GPIO1 и GPIO3 на ESP-01 это TX/RX (UART). Их использование для реле может
+# помешать прошивке/загрузке устройства. Рассмотрите использование других плат или
+# переназначение на доступные безопасные выводы (GPIO0, GPIO2), если это возможно.
 switch:
   - platform: gpio
-    pin: 1
+    pin: 
+      number: 1
+      mode:
+        output: true
     name: "Реле 1"
     id: relay1
     icon: mdi:power-socket-eu
     
   - platform: gpio
-    pin: 3
-    name: "Реле 3"
+    pin: 
+      number: 3
+      mode:
+        output: true
+    name: "Реле 3"  
     id: relay3
     icon: mdi:power-socket-eu
 
-# Глобальная переменная для хранения общего потребления
 globals:
+  - id: energy_pulses_total
+    type: float
+    restore_value: true
+    initial_value: '0.0'
+    
   - id: total_energy
     type: float
-    restore_value: yes
+    restore_value: true
     initial_value: '0.0'
 
-# Основной датчик для подсчета импульсов и расчета мощности
+  - id: total_energy_day
+    type: float
+    restore_value: true
+    initial_value: '0.0'
+    
+  - id: total_energy_night
+    type: float
+    restore_value: true
+    initial_value: '0.0'
+    
+  - id: total_energy_peak
+    type: float
+    restore_value: true
+    initial_value: '0.0'
+    
+  - id: last_tariff_energy
+    type: float
+    restore_value: true
+    initial_value: '0.0'
+
 sensor:
-  # Используем pulse_meter - более точный и эффективный способ
-  - platform: pulse_meter
-    pin:
-      number: 2
-      mode: INPUT_PULLUP
-      inverted: true
-    name: "Текущая мощность"
-    id: power_meter
+  # Основной счетчик импульсов - измеряет мощность и накапливает общее потребление
+  - platform: pulse_counter
+    pin: GPIO4
+    name: "Мощность"
+    id: energy_pulse_counter
     unit_of_measurement: 'W'
     device_class: power
     state_class: measurement
     accuracy_decimals: 0
     icon: mdi:flash
-    internal_filter: 50ms
-    timeout: 2min  # После 2 минут без импульсов показывать 0W
+    update_interval: 5s
+    internal_filter: 30us
+    count_mode:
+      rising_edge: INCREMENT
+      falling_edge: DISABLE
+
     filters:
-      # Конвертируем импульсы/мин в Ватты
-      # 1600 импульсов = 1 kWh
-      # 1 импульс = 1/1600 kWh = 0.625 Wh
-      # Если получаем X импульсов в минуту, то мощность = X * 0.625 Wh/мин * 60 мин/ч = X * 37.5 W
-      - multiply: 37.5  # (1000Wh/kWh / 1600 imp/kWh * 60 min/h)
-    
-    # Подсчет общего потребления энергии
+      - multiply: 37.5   # Для 1600 imp/kWh
+
     total:
       name: "Общее потребление"
       id: total_consumption
       device_class: energy
       state_class: total_increasing
-      accuracy_decimals: 3
+      accuracy_decimals: 1
       unit_of_measurement: 'kWh'
       icon: mdi:lightning-bolt
       filters:
-        # Конвертируем импульсы в kWh
-        - multiply: 0.000625  # (1 kWh / 1600 импульсов)
-        # Добавляем к сохраненному значению при перезагрузке
-        - lambda: |-
-            static bool first_run = true;
-            if (first_run) {
-              first_run = false;
-              return x + id(total_energy);
-            }
-            id(total_energy) = x;
-            return x;
+        # Преобразуем общие импульсы в kWh
+        - multiply: 0.000625  # 1/1600
       on_value:
         then:
           - lambda: |-
+              // Защита от перезаписи нулём после ребута:
+              // если у нас уже есть сохранённое (восстановленное) значение total_energy
+              // и новое значение x явно меньше (похоже на 0 после ребута), — игнорируем.
+              if (id(total_energy) > 0.0001 && x + 0.001 < id(total_energy)) {
+                ESP_LOGW("pulse", "Received smaller total (%.1f kWh) than stored (%.1f kWh). Ignoring (likely reboot).", x, id(total_energy));
+                return;
+              }
+      
+              // Обновляем переменные
               id(total_energy) = x;
-
-  # Счетчик импульсов для отладки
-  - platform: template
-    name: "Счетчик импульсов1"
-    id: pulse_counter
-    accuracy_decimals: 0
-    unit_of_measurement: "pulses"
-    icon: mdi:counter
-    lambda: |-
-      return id(total_consumption).state * 1600;
-    update_interval: 10s
+              id(energy_pulses_total) = x * 1600;
+      
+              // Тарифный расчёт
+              float current_energy = x;
+              float diff = current_energy - id(last_tariff_energy);
+      
+              if (diff > 0.0001 && diff < 10.0) {
+                auto time = id(ntp_time).now();
+                if (time.is_valid()) {
+                  int hour = time.hour;
+                  std::string zone;
+                  if (hour >= 23 || hour < 7) {
+                    zone = "night";
+                    id(total_energy_night) += diff;
+                  } else if ((hour >= 10 && hour < 17) || (hour >= 21 && hour < 23)) {
+                    zone = "day";
+                    id(total_energy_day) += diff;
+                  } else {
+                    zone = "peak";
+                    id(total_energy_peak) += diff;
+                  }
+                  id(last_tariff_energy) = current_energy;
+                  ESP_LOGD("tariff", "Обновление: +%.1f kWh в зоне %s", diff, zone.c_str());
+                  id(consumption_day).publish_state(id(total_energy_day));
+                  id(consumption_night).publish_state(id(total_energy_night));
+                  id(consumption_peak).publish_state(id(total_energy_peak));
+                } else {
+                  ESP_LOGW("tariff", "Время не синхронизировано!");
+                }
+              }
 
   # Датчик WiFi сигнала
   - platform: wifi_signal
-    name: "WiFi сигнал"
+    name: "WiFi сигнал dBm"
     id: wifi_signal_db
     internal: true
     update_interval: 60s
+    entity_category: diagnostic
 
-  - platform: copy # Reports the WiFi signal strength in %
+  - platform: copy
     source_id: wifi_signal_db
     icon: mdi:wifi
-    name: "WiFi Percent"
+    name: "WiFi сигнал"
     filters:
       - lambda: return min(max(2 * (x + 100.0), 0.0), 100.0);
     unit_of_measurement: "%"
-    entity_category: "diagnostic"
-    device_class: ""
+    entity_category: diagnostic
+    accuracy_decimals: 0
 
-  # Время работы устройства
   - platform: uptime
     name: "Время работы"
     update_interval: 60s
+    entity_category: diagnostic
 
-# Кнопки управления
+  # Сенсоры потребления по тарифам
+  - platform: template
+    id: consumption_day
+    name: "Дневной тариф"
+    unit_of_measurement: 'kWh'
+    device_class: energy
+    state_class: total_increasing
+    accuracy_decimals: 1
+    icon: mdi:white-balance-sunny
+    lambda: |-
+      return id(total_energy_day);
+
+  - platform: template
+    id: consumption_night
+    name: "Ночной тариf"
+    unit_of_measurement: 'kWh'
+    device_class: energy
+    state_class: total_increasing
+    accuracy_decimals: 1
+    icon: mdi:weather-night
+    lambda: |-
+      return id(total_energy_night);
+
+  - platform: template
+    id: consumption_peak
+    name: "Пиковый тариf"
+    unit_of_measurement: 'kWh'
+    device_class: energy
+    state_class: total_increasing
+    accuracy_decimals: 1
+    icon: mdi:chart-line
+    lambda: |-
+      return id(total_energy_peak);
+
+
+
+interval:
+  - interval: 1h
+    then:
+      - lambda: |-
+          auto time = id(ntp_time).now();
+          if (time.is_valid() && time.hour == 0 && time.minute < 1) {
+            ESP_LOGI("daily_reset", "Новые сутки");
+          }
+
+  - interval: 5min
+    then:
+      - if:
+          condition:
+            lambda: |-
+              auto time = id(ntp_time).now();
+              return !time.is_valid();
+          then:
+            - component.update: ntp_time
+            - logger.log: "Выполнена принудительная синхронизация времени"
+
 button:
   - platform: template
-    name: "Сброс счетчика"
+    name: "Сброс всех счетчиков"
     icon: mdi:restart
+    entity_category: config
+    on_press:
+      then:
+        # Сброс значений в памяти
+        - lambda: |-
+            id(energy_pulses_total) = 0.0;
+            id(total_energy) = 0.0;
+            id(total_energy_day) = 0.0;
+            id(total_energy_night) = 0.0;
+            id(total_energy_peak) = 0.0;
+            id(last_tariff_energy) = 0.0;
+        # Сбрасываем аппаратный счётчик через action (корректный синтаксис)
+        - pulse_counter.set_total_pulses:
+            id: energy_pulse_counter
+            value: 0
+        - logger.log: "Все счетчики сброшены"
+
+  - platform: template
+    name: "Сброс тарифных счетчиков"
+    icon: mdi:clock-outline
+    entity_category: config
     on_press:
       then:
         - lambda: |-
-            // Сбрасываем глобальную переменную
-            id(total_energy) = 0.0;
-            // Сбрасываем внутренний счетчик pulse_meter
-            id(total_consumption).publish_state(0.0);
-            ESP_LOGI("main", "Счетчик сброшен");
+            id(total_energy_day) = 0.0;
+            id(total_energy_night) = 0.0;
+            id(total_energy_peak) = 0.0;
+            id(last_tariff_energy) = id(total_energy);
+            
+            id(consumption_day).publish_state(0.0);
+            id(consumption_night).publish_state(0.0);
+            id(consumption_peak).publish_state(0.0);
+            
+            ESP_LOGI("tariff_reset", "Тарифные счетчики сброшены. Базовое значение: %.1f kWh", id(total_energy));
+        - logger.log: "Тарифные счетчики сброшены"
 
   - platform: restart
-    name: "Reboot"
+    name: "Перезагрузка"
     id: reboot_button
+    entity_category: config
 
-# Текстовые сенсоры для информации
 text_sensor:
   - platform: wifi_info
     ip_address:
-      name: IP Address
+      name: "IP адрес"
       icon: mdi:ip-outline
+      entity_category: diagnostic
     ssid:
-      name: SSID
-      icon: mdi:identifier
+      name: "SSID"
+      icon: mdi:wifi
+      entity_category: diagnostic
 
-  # Сенсор времени
   - platform: template
     name: "Текущее время"
     icon: mdi:clock-outline
     id: local_time
+    entity_category: diagnostic
     lambda: |-
-      char str[6];
-      time_t currTime = id(ntp_time).now().timestamp;
-      strftime(str, sizeof(str), "%H:%M", localtime(&currTime));
-      return { str };
+      auto time = id(ntp_time).now();
+      if (!time.is_valid()) return {"Нет времени"};
+      return time.strftime("%H:%M");
     update_interval: 60s
+
+  - platform: template
+    name: "Текущая тарифная зона"
+    icon: mdi:clock-check-outline
+    lambda: |-
+      auto time = id(ntp_time).now();
+      if (!time.is_valid()) return {"Неизвестно"};
+      
+      int hour = time.hour;
+      
+      if (hour >= 23 || hour < 7) {
+        return {"Ночной"};
+      } else if ((hour >= 10 && hour < 17) || (hour >= 21 && hour < 23)) {
+        return {"Дневной"};
+      } else {
+        return {"Пиковый"};
+      }
+    update_interval: 60s
+
+  - platform: version
+    name: "Версия ESPHome"
+    entity_category: diagnostic
+
+status_led:
+  pin:
+    number: GPIO2
+    inverted: true

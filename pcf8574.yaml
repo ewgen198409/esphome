@@ -1,7 +1,7 @@
 substitutions:
-  temp_sensor_calibrate: -0.5
+  temp_sensor_calibrate: -0.5 # Калибровка датчика температуры
   auto_light_timer: 300000  # таймер автоподсветки 5min
-
+  auto_light_brightness: 80% # Яркость автоподсветки
 
 esphome:
   name: pcf8574
@@ -11,6 +11,20 @@ esphome:
     # board_upload.maximum_size: 1572864
     # board_build.f_flash: 40000000L
     board_build.f_cpu: 80000000L
+  on_boot:
+    - if:         # восстанавливаем состояние замка при загрузке
+        condition:
+          lambda: 'return id(garage_lock_state);'  # Если сохранённое состояние = LOCKED
+        then:
+          - lock.template.publish:
+              id: garage_lock
+              state: LOCKED
+        else:
+          - lock.template.publish:
+              id: garage_lock
+              state: UNLOCKED
+
+
 
 esp8266:
   board: nodemcuv2
@@ -99,7 +113,14 @@ time:
     servers:
       - 192.168.1.1
 
-# Button Reboot
+# ====================== surise or sunset sensors =============================
+sun:
+  latitude: 54.9293  # Укажите вашу широту
+  longitude: 73.2045 # Укажите вашу долготу
+  id: sun0
+# ===================================================================================
+
+# Button Reboot ======================================================================
 button:
   - platform: restart
     name: "Reboot"
@@ -567,6 +588,10 @@ switch:
       - globals.set:
           id: auto_pwm_enabled
           value: 'false'
+      - light.turn_off: pwm_lights
+      - globals.set:
+          id: pwm_auto_off_time
+          value: '0'
 # ====================================================================================================================================
 
 cover:
@@ -594,7 +619,8 @@ lock:
   - platform: template
     name: "Garage door Lock"
     id: garage_lock
-    optimistic: true
+    optimistic: false  # Убираем optimistic, так как состояние будет восстанавливаться через globals
+    assumed_state: false  # ESPHome будет пытаться синхронизировать состояние
     lock_action:
       - if:
           condition:
@@ -602,6 +628,9 @@ lock:
           then:
             - switch.turn_on: garage_door_relay_lock
             - delay: 3s
+            - globals.set:
+                id: garage_lock_state
+                value: 'true'  # Сохраняем состояние "LOCKED"
             - lock.template.publish:
                 id: garage_lock
                 state: LOCKED
@@ -610,6 +639,9 @@ lock:
                 level: WARN
                 format: "Cannot lock - door is open!"
             - delay: 2s
+            - globals.set:
+                id: garage_lock_state
+                value: 'false'  # Сохраняем состояние "UNLOCKED"
             - lock.template.publish:
                 id: garage_lock
                 state: UNLOCKED
@@ -617,6 +649,9 @@ lock:
     unlock_action:
       - switch.turn_on: garage_door_relay_unlock
       - delay: 3s
+      - globals.set:
+          id: garage_lock_state
+          value: 'false'  # Сохраняем состояние "UNLOCKED"
       - lock.template.publish:
           id: garage_lock
           state: UNLOCKED
@@ -668,6 +703,21 @@ light:
     output: light_output0
     icon: mdi:light-flood-down
     restore_mode: ALWAYS_OFF
+    on_turn_off:
+      - if:
+          condition:
+            and:
+              - lambda: 'return !id(sun0).is_above_horizon();'
+              - lambda: 'return id(auto_pwm_enabled);'
+              - lambda: 'return !id(pwm_lights).current_values.is_on();'
+              - lambda: 'return !id(two_lamp).current_values.is_on() && !id(three_lamp).current_values.is_on();'
+          then:
+            - light.turn_on: 
+                id: pwm_lights
+                brightness: ${auto_light_brightness}
+            - globals.set:
+                id: pwm_auto_off_time
+                value: !lambda 'return millis() + ${auto_light_timer};'
 
   - platform: binary
     name: Свет 2
@@ -675,6 +725,21 @@ light:
     output: light_output1
     icon: mdi:light-flood-down
     restore_mode: ALWAYS_OFF
+    on_turn_off:
+      - if:
+          condition:
+            and:
+              - lambda: 'return !id(sun0).is_above_horizon();'
+              - lambda: 'return id(auto_pwm_enabled);'
+              - lambda: 'return !id(pwm_lights).current_values.is_on();'
+              - lambda: 'return !id(one_lamp).current_values.is_on() && !id(three_lamp).current_values.is_on();'
+          then:
+            - light.turn_on: 
+                id: pwm_lights
+                brightness: ${auto_light_brightness}
+            - globals.set:
+                id: pwm_auto_off_time
+                value: !lambda 'return millis() + ${auto_light_timer};'
 
   - platform: binary
     name: Свет 3
@@ -682,6 +747,21 @@ light:
     output: light_output2
     icon: mdi:light-flood-down
     restore_mode: ALWAYS_OFF
+    on_turn_off:
+      - if:
+          condition:
+            and:
+              - lambda: 'return !id(sun0).is_above_horizon();'
+              - lambda: 'return id(auto_pwm_enabled);'
+              - lambda: 'return !id(pwm_lights).current_values.is_on();'
+              - lambda: 'return !id(one_lamp).current_values.is_on() && !id(two_lamp).current_values.is_on();'
+          then:
+            - light.turn_on: 
+                id: pwm_lights
+                brightness: ${auto_light_brightness}
+            - globals.set:
+                id: pwm_auto_off_time
+                value: !lambda 'return millis() + ${auto_light_timer};'
 
 # Light PWM ==============================================================================
   - platform: monochromatic
@@ -914,15 +994,18 @@ binary_sensor:
       - if:
           condition:
             and:
-              - lambda: 'return x;'
-              - lambda: 'return id(auto_pwm_enabled);'
-              - lambda: 'return !id(pwm_lights).current_values.is_on();'
-              - lambda: 'return !id(one_lamp).current_values.is_on() && 
-                         !id(two_lamp).current_values.is_on() && 
-                         !id(three_lamp).current_values.is_on();'
-              - lambda: 'return id(alarm_garage).get_state() == 0;'
+              - lambda: 'return x;'                                             # Сработал датчик движения
+              - lambda: 'return id(auto_pwm_enabled);'                          # Выключатель AvtoLight включен
+              - lambda: 'return !id(sun0).is_above_horizon();'                  # Солнце ниже горизонта
+              - lambda: 'return !id(pwm_lights).current_values.is_on();'        # Подсветка не горит
+              - lambda: 'return !id(one_lamp).current_values.is_on() &&
+                         !id(two_lamp).current_values.is_on() &&
+                         !id(three_lamp).current_values.is_on();'               # Светильники выключены
           then:
-            - light.turn_on: pwm_lights
+            - light.turn_on: 
+                id: pwm_lights
+                brightness: ${auto_light_brightness}
+
             - globals.set:
                 id: pwm_auto_off_time
                 value: !lambda 'return millis() + ${auto_light_timer};'
@@ -947,9 +1030,11 @@ binary_sensor:
               - lambda: 'return !id(one_lamp).current_values.is_on() && 
                          !id(two_lamp).current_values.is_on() && 
                          !id(three_lamp).current_values.is_on();'
-              - lambda: 'return id(alarm_garage).get_state() == 0;'
           then:
-            - light.turn_on: pwm_lights
+            - light.turn_on: 
+                id: pwm_lights
+                brightness: ${auto_light_brightness}
+
             - globals.set:
                 id: pwm_auto_off_time
                 value: !lambda 'return millis() + ${auto_light_timer};'
@@ -977,9 +1062,11 @@ binary_sensor:
               - lambda: 'return !id(one_lamp).current_values.is_on() && 
                          !id(two_lamp).current_values.is_on() && 
                          !id(three_lamp).current_values.is_on();'
-              - lambda: 'return id(alarm_garage).get_state() == 0;'
           then:
-            - light.turn_on: pwm_lights
+            - light.turn_on: 
+                id: pwm_lights
+                brightness: ${auto_light_brightness}
+
             - globals.set:
                 id: pwm_auto_off_time
                 value: !lambda 'return millis() + ${auto_light_timer};'
@@ -1123,6 +1210,10 @@ globals:
     restore_value: no
     initial_value: '0'
 
+  - id: garage_lock_state
+    type: bool
+    restore_value: yes  # Сохраняет значение после перезагрузки
+    initial_value: 'false'  # Начальное значение (false = UNLOCKED, true = LOCKED)
 
 # Добавляем интервал для проверки таймаута меню
 interval:
@@ -1232,7 +1323,13 @@ alarm_control_panel:
             value: !lambda 'return millis() + 60000UL;'
         - globals.set:
             id: arming_timer_end
-            value: !lambda 'return millis() + 60000UL;'  # 60 секунд с защитой от переполнения
+            value: !lambda 'return millis() + 60000UL;'
+      # Добавлена проверка для автоматического включения подсветки
+        - lambda: |-
+            if (!id(sun0).is_above_horizon() && id(auto_pwm_enabled)) {
+              id(pwm_lights).turn_on().set_brightness(0.9).perform();
+              id(pwm_auto_off_time) = millis() + ${auto_light_timer};
+            }
 
     on_armed_away:
       then:

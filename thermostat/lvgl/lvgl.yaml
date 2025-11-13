@@ -1,6 +1,7 @@
 lvgl: 
   displays: display1
   encoders: 
+    initial_focus: spin_down
     enter_button: enter_button
     sensor:
       right_button: right_button
@@ -78,6 +79,7 @@ lvgl:
                 x: 72
           on_press:
             - lvgl.widget.hide: boot_screen
+            - lvgl.widget.focus: spin_down
 
       # Заголовок
       - obj:
@@ -118,6 +120,16 @@ lvgl:
                 text_color: 0xFFFFFF
                 text_font: tahoma_12
 
+            # Значек актинвности нагревателя
+            - label:
+                text: "\U000F1A45"
+                id: lbl_heateron
+                hidden: true
+                x: 78
+                y: -1
+                text_align: center
+                text_color: 0xFFFFFF
+                text_font: tahoma_12
   pages:
     # Страница термостата
     - id: page_one
@@ -134,12 +146,14 @@ lvgl:
             align: CENTER
             zoom: 1.0
 
+        # Фоновая дуга (задний план)
         - arc:
             x: 0
             y: 12
-            arc_color: white
-            id: arc_therm
-            value: !lambda return id(thermostat_house).target_temperature;
+            arc_color: gray
+            arc_opa: 50%
+            id: arc_background
+            value: 25  # любое значение в пределах min-max, т.к. не используется
             min_value: 10.0
             max_value: 40.0
             adjustable: false
@@ -147,24 +161,66 @@ lvgl:
             height: 80%
             align: CENTER
             arc_width: 4
-            scroll_on_focus: true
+            start_angle: 150
+            end_angle: 30
+            indicator:  # отключаем индикатор для фона
+              arc_opa: 0%
+            knob:  # отключаем ручку для фона
+              bg_opa: 0%
+
+        # target_temperature (средний план)
+        - arc:
+            x: 0
+            y: 12
+            arc_color: gray
+            arc_opa: TRANSP  # прозрачная дуга
+            id: arc_therm
+            value: !lambda return id(thermostat_house).target_temperature;
+            min_value: 10.0
+            max_value: 40.0
+            adjustable: false  # запрещаем изменение
+            width: 80%
+            height: 80%
+            align: CENTER
+            arc_width: 4
             start_angle: 150
             end_angle: 30
             indicator:
               arc_color: orange
+              arc_opa: 80%
               arc_width: 4
               focused:
                 arc_color: orange
             knob:
-              bg_color: orange
-              pad_all: 3
-              focused:
-                bg_color: red
-            # on_value:
-            #   then:
-            #     - climate.control:
-            #         id: thermostat_house
-            #         target_temperature: !lambda return x;
+              bg_opa: 0%
+
+        # current_temperature (передний план (knob))
+        - arc:
+            x: 0
+            y: 12
+            arc_color: gray
+            arc_opa: 0%  # прозрачная дуга
+            id: arc_therm_current
+            value: !lambda return id(thermostat_house).current_temperature;
+            min_value: 10.0
+            max_value: 40.0
+            width: 80%
+            height: 80%
+            align: CENTER
+            arc_width: 4
+            start_angle: 150
+            end_angle: 30
+            adjustable: true          # нужен, иначе knob не появится
+            click_focusable: false    # исключаем из фокуса
+            indicator:
+              arc_color: red
+              arc_opa: 0%
+              arc_width: 4
+            knob:
+              bg_color: red
+              bg_opa: 100%
+              radius: 100%
+              pad_all: 2          # уменьшает размер knob
 
         # кнопка - термостата      
         - button:
@@ -310,9 +366,9 @@ lvgl:
             x: 107
             y: 17
             bg_opa: TRANSP
-            border_color: white
             border_width: 0
-            shadow_color: black
+            shadow_width: 0
+            outline_width: 0
             radius: 10
             pad_all: 1
             focus_key:
@@ -322,6 +378,8 @@ lvgl:
             on_click:
               # Переход на page_settings
               - lvgl.page.show: page_settings
+              - lvgl.widget.focus: slider_light
+
             widgets:
               - label:
                   text: "\U000F08BB"
@@ -332,7 +390,7 @@ lvgl:
                   text_color: 0xFFFFFF
 
 
-    # Страница настроек
+    # Страница настроек -----------------------------------------------------------------------------
     - id: page_settings
 
       widgets:
@@ -354,7 +412,7 @@ lvgl:
             width: 70
             height: 8
             id: slider_light
-            value: !lambda return (id(back_light).current_values.get_brightness() * 100);
+            value: !lambda return id(set_brghtness);
             max_value: 100
             min_value: 0
             animated: true
@@ -418,7 +476,7 @@ lvgl:
             pad_all: 0
             range_from: 0.0
             range_to: 2.0
-            step: 0.5
+            selected_digit: 1
             digits: 2
             decimal_places: 1
             # восстанавливаем значение при загрузке
@@ -451,11 +509,11 @@ lvgl:
             pad_all: 0
             range_from: 0.0
             range_to: 2.0
-            step: 0.5
             focus_key:
               outline_color: orange
               outline_opa: COVER
               outline_pad: 1
+            selected_digit: 1
             digits: 2
             decimal_places: 1
             # восстанавливаем значение при загрузке
@@ -500,7 +558,7 @@ lvgl:
             pad_all: 0
             range_from: -9.0
             range_to: 9.0
-            step: 0.1
+            selected_digit: 1
             digits: 2
             decimal_places: 1
             value: !lambda return id(ntc_temp_correction);
@@ -542,6 +600,7 @@ lvgl:
               then:
                 # Переход на page_one
                 - lvgl.page.show: page_one
+                - lvgl.widget.focus: spin_down
 
         # кнопка перезагрузки
         - button:

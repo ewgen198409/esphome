@@ -2,7 +2,6 @@ spi:
   clk_pin: GPIO18
   mosi_pin: GPIO23
 
-
 display:
   - platform: ili9xxx
     id: display1

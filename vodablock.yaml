@@ -400,11 +400,21 @@ display:
     update_interval: 0.3s
     length: 4
     lambda: |-
-      if (id(sensor_leak_1).state == true){    
+      if (id(boiler_display_state) == 1) {
+        it.printf(0, "ON ");
+      } else if (id(boiler_display_state) == 2) {
+        it.printf(0, "OFF");
+      } else if (id(boiler_display_state) == 3) {
+        it.printf(0, "%.0f~", id(boiler_control).target_temperature_high);
+      } else if (id(boiler_display_state) == 4) {
+        it.printf(0, "NAS1");
+      } else if (id(boiler_display_state) == 5) {
+        it.printf(0, "NAS0");
+      } else if (id(sensor_leak_1).state == true){    
         it.printf(0, "FAIL");
-      }else if (id(sensor_leak_2).state == true){        
+      } else if (id(sensor_leak_2).state == true){        
         it.printf(0, "FAIL");
-      }else{
+      } else {
         switch(id(time_state)) {
         case 0:
           it.printf("%.1f~", id(sensor_hot_water).state);
@@ -446,7 +456,7 @@ time:
 # scale_up:d=32,o=5,b=100:c,c#,d#,e,f#,g#,a#,b
 output:
   - platform: ledc
-    frequency: 15000Hz
+    frequency: 18000Hz
     pin: 
       number: GPIO19
 #      ignore_pin_validation_error: true
@@ -473,8 +483,8 @@ climate:
       temperature_step:
         target_temperature: 1.0
         current_temperature: 0.1
-    default_target_temperature_low: 40.0 °C
-    default_target_temperature_high: 55.0 °C
+    default_target_temperature_low: 35.0
+    default_target_temperature_high: 55.0
 
 # ===============================================================
 # ================== fan control bathroom ========================
@@ -495,6 +505,12 @@ globals:
     type: bool
     restore_value: true
     initial_value: 'true'  # Автоматический режим включён по умолчанию
+  - id: boiler_display_state
+    type: int
+    initial_value: '0'  # 0 = нормальный режим, 1 = показываем ON, 2 = показываем OFF, 3 = показываем температуру, 4 = NAS1, 5 = NAS0
+  - id: boiler_display_timeout
+    type: int
+    initial_value: '0'  # счётчик для отсчёта 4 секунд
 
 
 # Логика автоматического управления вентилятором
@@ -530,6 +546,17 @@ interval:
                 } else if (humidity < id(lower_threshold)) {
                   id(switch_ventil).turn_off();
                 }
+
+  # Таймер для отсчёта 4 секунд отображения ON/OFF на дисплее
+  - interval: 300ms
+    then:
+      - lambda: |-
+          if (id(boiler_display_timeout) > 0) {
+            id(boiler_display_timeout) -= 1;
+            if (id(boiler_display_timeout) == 0) {
+              id(boiler_display_state) = 0;  // вернуть в нормальный режим
+            }
+          }
 
   # Автоматическое управление реле по интервалам
   - interval: 1min  # Проверяем расписание каждую минуту
@@ -713,6 +740,87 @@ number:
     initial_value: 60
     restore_value: true
 # =================================================================
+
+remote_receiver:
+  pin:
+    number: GPIO18
+    inverted: true
+  dump: lg
+  on_lg:
+    - then:
+        - if:
+            condition:
+              lambda: 'return x.data == 0x807F40BF;'
+            then:
+              - lambda: |-
+                  // Переключаем термостат
+                  if (id(boiler_control).mode == CLIMATE_MODE_HEAT) {
+                    id(boiler_control).mode = CLIMATE_MODE_OFF;
+                    id(boiler_display_state) = 2;  // OFF
+                  } else {
+                    id(boiler_control).mode = CLIMATE_MODE_HEAT;
+                    id(boiler_display_state) = 1;  // ON
+                    id(switch_boiler).turn_on();  // Включаем реле бойлера
+                  }
+                  id(boiler_display_timeout) = 13;  // 4 секунды (300ms * 13 = 3.9s)
+              - if:
+                  condition:
+                    lambda: 'return id(boiler_display_state) == 1;'
+                  then:
+                    - rtttl.play: 'scale_up:d=32,o=5,b=100:c,d,e,f,g'
+              - if:
+                  condition:
+                    lambda: 'return id(boiler_display_state) == 2;'
+                  then:
+                    - rtttl.play: 'scale_down:d=32,o=5,b=100:g,f,e,d,c'
+        - if:
+            condition:
+              lambda: 'return x.data == 0x807F8A75;'
+            then:
+              - rtttl.play: 'button_click:d=32,o=6,b=100:c'
+              - lambda: |-
+                  // Уменьшаем температуру на 1 градус
+                  float new_temp = id(boiler_control).target_temperature_high - 1.0;
+                  if (new_temp >= 10.0) {
+                    id(boiler_control).target_temperature_high = new_temp;
+                    id(boiler_display_state) = 3;  // показываем температуру
+                    id(boiler_display_timeout) = 13;  // 4 секунды (300ms * 13 = 3.9s)
+                  }
+        - if:
+            condition:
+              lambda: 'return x.data == 0x807F48B7;'
+            then:
+              - rtttl.play: 'button_click:d=32,o=6,b=100:c'
+              - lambda: |-
+                  // Увеличиваем температуру на 1 градус
+                  float new_temp = id(boiler_control).target_temperature_high + 1.0;
+                  if (new_temp <= 80.0) {
+                    id(boiler_control).target_temperature_high = new_temp;
+                    id(boiler_display_state) = 3;  // показываем температуру
+                    id(boiler_display_timeout) = 13;  // 4 секунды (300ms * 13 = 3.9s)
+                  }
+        - if:
+            condition:
+              lambda: 'return x.data == 0x807F609F;'
+            then:
+              - lambda: |-
+                  // Проверяем текущее состояние и переключаем
+                  bool current_state = id(switch_nasos).state;
+                  if (current_state) {
+                    id(boiler_display_state) = 5;  // NAS0 (выключение)
+                  } else {
+                    id(boiler_display_state) = 4;  // NAS1 (включение)
+                  }
+                  id(boiler_display_timeout) = 13;  // 4 секунды
+              - switch.toggle: switch_nasos
+              - rtttl.play: 'button_click:d=32,o=6,b=100:c'
+        - if:
+            condition:
+              lambda: 'return x.data == 0x807F50AF;'
+            then:
+              - switch.toggle: switch_ventil
+              - rtttl.play: 'button_click:d=32,o=6,b=100:c'
+
 
 #     DOP CONNECTOR
 # 

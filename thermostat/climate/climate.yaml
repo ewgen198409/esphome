@@ -26,6 +26,10 @@
             format: "%.1f°c"
             args: [ 'x.target_temperature' ]
 
+      - lvgl.arc.update:
+          id: arc_therm_current
+          value: !lambda return id(thermostat_house).current_temperature;
+
       - text.set:
           id: state_text
           value: !lambda |-

@@ -9,7 +9,7 @@ substitutions:
 esphome:
   name: home-thermostat
   on_boot:
-    - lambda: id(back_light).turn_on().set_brightness(1).perform(); // включаем подсветку на 100%
+#    - lambda: id(back_light).turn_on().set_brightness(1).perform(); // включаем подсветку на 100%
     - delay: 7s   # ждем 
     - lvgl.widget.hide: boot_screen   # закрываем экран загрузки
     - delay: 5s   # ждем
@@ -29,6 +29,9 @@ esphome:
     - lvgl.spinbox.update:
         id: temp_correction
         value: !lambda return id(ntc_temp_correction) * 10;
+    - lvgl.slider.update:
+        id: slider_light
+        value: !lambda return id(set_brghtness);
 
 esp32:
   board: lolin32_lite
@@ -96,6 +99,10 @@ switch:
     id: relay
     name: Relay 2
     pin: GPIO25
+    on_turn_on:
+      - lvgl.widget.show: lbl_heateron
+    on_turn_off:
+      - lvgl.widget.hide: lbl_heateron
 
 output:
   # выход подсветки дисплея
@@ -125,7 +132,7 @@ text:
     internal: true
 
 image:
-  - file: https://esphome.io/_static/favicon-512x512.png
+  - file: https://esphome.io/favicon-512x512.png
     id: boot_logo
     resize: 80x80
     type: RGB565
@@ -204,8 +211,8 @@ script:
     mode: restart
     then:
       - delay: ${screensaver}
-      - lvgl.page.show: page_time
       - lvgl.widget.hide: status_bar
+      - lvgl.page.show: page_time
       - lambda: id(back_light).turn_on().set_brightness(${backlight}).perform();
 
 globals:
@@ -223,8 +230,8 @@ globals:
 
   # память заданной основной яркости
   - id: set_brghtness
-    type: float
-    initial_value: "0.5"
+    type: int
+    initial_value: '50'
     restore_value: true
 
   - id: ntc_temp_correction

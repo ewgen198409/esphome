@@ -12,6 +12,8 @@
           "\U000F0238", # mdi:fire
           "\U000F17BF", # mdi:arrow-up-right
           "\U000F0393", # mdi:thermostat
+          "\U000F1AAF", # mdi:heating-coil
+          "\U000F1A45", # mdi:heat-wave
           "\U000F08BB", # mdi:cog-outline
           "\U000F07D0", # mdi:home-assistant
           "\U000F0E04", # mdi:thermometer-minus
@@ -67,6 +69,7 @@
           "\U000F0393", # mdi:thermostat
           "\U000F08BB", # mdi:cog-outline
           "\U000F07D0", # mdi:home-assistant
+          "\U000F1AAF", # mdi:heating-coil
           "\U000F0E04", # mdi:thermometer-minus
           "\U000F0E05", # mdi:thermometer-plus
           "\U000F0E0A", # mdi:water-outline

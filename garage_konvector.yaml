@@ -132,6 +132,20 @@ binary_sensor:
       inverted: True
     name: "Button ${name}"
     internal: true
+    on_state:
+      then:
+        - lambda: |-
+            static bool last_state = false;
+            if (x && !last_state) {  // Нажатие кнопки (переход в true)
+              auto call = id(thermostat_garage_konvector).make_call();
+              if (id(thermostat_garage_konvector).mode == climate::CLIMATE_MODE_HEAT) {
+                call.set_mode(climate::CLIMATE_MODE_OFF);
+              } else {
+                call.set_mode(climate::CLIMATE_MODE_HEAT);
+              }
+              call.perform();
+            }
+            last_state = x;
 
 
 # Сенсор для UDP climate ==========================================================================================
