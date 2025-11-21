@@ -1,0 +1,184 @@
+preferences:
+  flash_write_interval: 5min
+
+esphome:
+  name: termostat-hall
+  friendly_name: "Термостат Холл"
+
+esp8266:
+  board: esp01_1m
+  restore_from_flash: true
+
+logger:
+
+api:
+  reboot_timeout: 0s
+  encryption:
+    key: "KOWDAA8XBu8jM5F994wvQ6ji5Mhwm2J29yZXx2C9Kko="
+
+ota:
+  - platform: esphome
+    password: "9aa6e561a6c491657f320a1b15fde731"
+
+wifi:
+  output_power: 12dB
+  power_save_mode: none
+  networks:
+    - ssid: WiFi_IoT
+      password: "ewgeniy507388"
+    - ssid: Keenetic-Home
+      password: "9994554500"
+
+# Подключаем MQTT, так как нам нужно слушать другое устройство
+mqtt:
+  broker: 192.168.1.1
+  port: 1883
+  discovery: false
+  discover_ip: false
+
+# ---------------------------------------------------------
+# 1. ДАТЧИКИ
+# ---------------------------------------------------------
+
+# Локальная шина 1-Wire (GPIO 2)
+one_wire:
+  - platform: gpio
+    pin: GPIO2
+
+sensor:
+  # --- Датчик 1: Температура пола (Локальный) ---
+  - platform: dallas_temp
+    name: "Температура Пола"
+    id: temp_floor
+    # Важно: если датчик пола отвалится, отключаем нагрев для безопасности
+    on_value_range:
+      - above: 40.0 # Аварийная отсечка (защита от перегрева)
+        then:
+          - switch.turn_off: safe_heater_switch
+
+  # --- Датчик 2: Температура воздуха (Удаленный через MQTT) ---
+  - platform: template
+    name: "Температура Воздуха (Комната)"
+    id: temp_room_remote
+    # В Tasmota данные приходят в JSON. Нам нужно извлечь именно температуру.
+    # Обычно путь выглядит так: {"DS18B20": {"Temperature": 22.5}}
+    # Проверьте JSON в консоли Tasmota, возможно путь будет другим!
+    lambda: |-
+      if (id(tasmota_json_data).has_state()) {
+        auto json_data = parse_json(id(tasmota_json_data).state);
+        if (json_data["DS18B20"].is<JsonObject>()) {
+          auto ds18b20_data = json_data["DS18B20"];
+          if (ds18b20_data["Temperature"].is<float>()) {
+            auto temperature_value = ds18b20_data["Temperature"];
+            if (temperature_value.is<float>()) {
+              return temperature_value.as<float>();
+            }
+          }
+        }
+      }
+      return {};
+    accuracy_decimals: 1
+
+text_sensor:
+  - platform: mqtt_subscribe
+    name: "Tasmota JSON Data"
+    id: tasmota_json_data
+    topic: tele/tas_house_2/SENSOR
+
+# ---------------------------------------------------------
+# 1.1. НАСТРОЙКИ ТЕМПЕРАТУРЫ
+# ---------------------------------------------------------
+
+number:
+  # Настройка максимальной температуры пола (защита от перегрева)
+  - platform: template
+    name: "Максимальная температура пола"
+    id: max_floor_temp
+    min_value: 20.0
+    max_value: 35.0
+    step: 0.5
+    unit_of_measurement: "°C"
+    initial_value: 28.0
+    icon: "mdi:thermometer"
+    optimistic: true
+
+# ---------------------------------------------------------
+# 2. ДАТЧИК ДВИЖЕНИЯ (PIR) - GPIO 14
+# ---------------------------------------------------------
+binary_sensor:
+  - platform: gpio
+    pin:
+      number: GPIO14
+      # PIR датчики обычно выдают высокий уровень (HIGH) при движении.
+      # Если у вас наоборот, удалите inverted или поставьте pullup.
+      mode: INPUT
+    name: "Датчик движения Холл"
+    device_class: motion
+    id: pir_motion
+
+# ---------------------------------------------------------
+# 3. РЕЛЕ И ЛОГИКА ЗАЩИТЫ
+# ---------------------------------------------------------
+switch:
+  # Физическое реле (скрываем от Home Assistant, так как им управляет логика)
+  - platform: gpio
+    pin: GPIO4
+    id: relay_physical
+    name: "Реле Нагревателя пола"
+    internal: true 
+
+  - platform: gpio
+    pin: GPIO12
+    id: relay_dopolnit
+    name: "Реле Свободное"
+    internal: true
+
+  # Виртуальный переключатель "Безопасный нагрев"
+  # Именно им будет управлять Термостат.
+  # Он включит реле ТОЛЬКО если температура пола в норме.
+  - platform: template
+    name: "Нагреватель пола"
+    id: safe_heater_switch
+    lambda: |-
+      if (id(relay_physical).state) {
+        return true;
+      } else {
+        return false;
+      }
+    turn_on_action:
+      - if:
+          condition:
+            lambda: "return id(temp_floor).state < id(max_floor_temp).state;"
+          then:
+            - switch.turn_on: relay_physical
+          else:
+            - logger.log: "ОТКАЗ: Пол слишком горячий, нагрев заблокирован!"
+    turn_off_action:
+      - switch.turn_off: relay_physical
+
+# ---------------------------------------------------------
+# 4. ТЕРМОСТАТ (КЛИМАТ)
+# ---------------------------------------------------------
+climate:
+  - platform: thermostat
+    name: "Климат Холл"
+    # Главный сенсор для принятия решений - это ТЕМПЕРАТУРА ВОЗДУХА
+    sensor: temp_room_remote
+    
+    # Настройки целевой температуры
+    min_heating_off_time: 10s
+    min_heating_run_time: 10s
+    min_idle_time: 10s
+    heat_deadband: 1.0
+    heat_overrun: 0.0
+    visual:
+      min_temperature: 20
+      max_temperature: 35
+      temperature_step:
+        target_temperature: 1.0
+        current_temperature: 0.1
+    # Термостат дергает наш "Безопасный переключатель", а не реле напрямую
+    heat_action:
+      - switch.turn_on: safe_heater_switch
+    idle_action:
+      - switch.turn_off: safe_heater_switch

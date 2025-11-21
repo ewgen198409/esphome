@@ -116,7 +116,22 @@ text_sensor:
 # ===============================================================
 button:
   - platform: restart
-    name: Restart  
+    name: Restart
+  
+  - platform: template
+    name: "Догреть бойлер"
+    icon: mdi:fire
+    on_press:
+      - lambda: |-
+          // Если реле уже включено - выключаем его и отменяем флаг
+          if (id(switch_boiler).state) {
+            id(switch_boiler).turn_off();
+            id(manual_boiler_override) = false;
+          } else {
+            // Если реле выключено - включаем его и устанавливаем флаг ручного управления
+            id(switch_boiler).turn_on();
+            id(manual_boiler_override) = true;
+          }  
 # ================== Init status led (on button) ===============
 status_led:
   id: led_status
@@ -217,6 +232,26 @@ switch:
           if (id(auto_mode_switch)){
             id(auto_mode_switch).turn_off();
           }
+
+# ============================================================================
+# ================ Выключатель блокировки пикового времени 1 (7:00-10:00) ===========
+  - platform: template
+    name: "Блокировка пикового времени утро (7:00-10:00)"
+    icon: mdi:clock-alert
+    id: peak_time_morning_lock
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF
+    entity_category: "config"
+
+# ============================================================================
+# ================ Выключатель блокировки пикового времени 2 (17:00-21:00) ===========
+  - platform: template
+    name: "Блокировка пикового времени вечер (17:00-21:00)"
+    icon: mdi:clock-alert
+    id: peak_time_evening_lock
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF
+    entity_category: "config"
 
 # ============== Init DS18B20 (датчики температуры) ====================
 one_wire:
@@ -494,13 +529,13 @@ globals:
   - id: time_state
     type: int
   - id: upper_threshold
-    type: float
+    type: int
     restore_value: true
-    initial_value: '70.0'
+    initial_value: '70'
   - id: lower_threshold
-    type: float
+    type: int
     restore_value: true
-    initial_value: '50.0'
+    initial_value: '50'
   - id: auto_mode
     type: bool
     restore_value: true
@@ -511,12 +546,82 @@ globals:
   - id: boiler_display_timeout
     type: int
     initial_value: '0'  # счётчик для отсчёта 4 секунд
+  - id: boiler_state_before_peak_morning
+    type: bool
+    initial_value: 'false'  # Сохраняет состояние термостата перед началом пикового времени утра
+  - id: boiler_state_before_peak_evening
+    type: bool
+    initial_value: 'false'  # Сохраняет состояние термостата перед началом пикового времени вечера
+  - id: in_peak_morning
+    type: bool
+    initial_value: 'false'  # Флаг: находимся ли в пиковом времени утром
+  - id: in_peak_evening
+    type: bool
+    initial_value: 'false'  # Флаг: находимся ли в пиковом времени вечером
+  - id: manual_boiler_override
+    type: bool
+    initial_value: 'false'  # Флаг: реле управляется вручную кнопкой (блокирует автоматическое выключение)
 
 
 # Логика автоматического управления вентилятором
 interval:
   - interval: 10s
     then:
+      # Логика управления пиковым временем
+      - lambda: |-
+          auto now = id(homeassistant_time).now();
+          if (!now.is_valid()) return;
+          
+          int hour = now.hour;
+          
+          // Проверка утреннего пикового времени (7:00-10:00)
+          bool is_peak_morning = (hour >= 7 && hour < 10) && id(peak_time_morning_lock).state;
+          bool was_in_peak_morning = id(in_peak_morning);
+          
+          if (is_peak_morning && !was_in_peak_morning) {
+            // Вход в пиковое время утром - сохраняем состояние
+            id(boiler_state_before_peak_morning) = (id(boiler_control).mode == CLIMATE_MODE_HEAT);
+            id(in_peak_morning) = true;
+            // Выключаем термостат (если нет ручного управления)
+            if (!id(manual_boiler_override)) {
+              id(boiler_control).mode = CLIMATE_MODE_OFF;
+              id(switch_boiler).turn_off();
+            }
+          } else if (!is_peak_morning && was_in_peak_morning) {
+            // Выход из пикового времени утром - восстанавливаем состояние
+            id(in_peak_morning) = false;
+            if (id(boiler_state_before_peak_morning)) {
+              id(boiler_control).mode = CLIMATE_MODE_HEAT;
+              id(switch_boiler).turn_on();
+            } else {
+              id(boiler_control).mode = CLIMATE_MODE_OFF;
+            }
+          }
+          
+          // Проверка вечернего пикового времени (17:00-21:00)
+          bool is_peak_evening = (hour >= 17 && hour < 21) && id(peak_time_evening_lock).state;
+          bool was_in_peak_evening = id(in_peak_evening);
+          
+          if (is_peak_evening && !was_in_peak_evening) {
+            // Вход в пиковое время вечером - сохраняем состояние
+            id(boiler_state_before_peak_evening) = (id(boiler_control).mode == CLIMATE_MODE_HEAT);
+            id(in_peak_evening) = true;
+            // Выключаем термостат (если нет ручного управления)
+            if (!id(manual_boiler_override)) {
+              id(boiler_control).mode = CLIMATE_MODE_OFF;
+              id(switch_boiler).turn_off();
+            }
+          } else if (!is_peak_evening && was_in_peak_evening) {
+            // Выход из пикового времени вечером - восстанавливаем состояние
+            id(in_peak_evening) = false;
+            if (id(boiler_state_before_peak_evening)) {
+              id(boiler_control).mode = CLIMATE_MODE_HEAT;
+              id(switch_boiler).turn_on();
+            } else {
+              id(boiler_control).mode = CLIMATE_MODE_OFF;
+            }
+          }
+      
       - if:
           condition:
           # Если один из сенсоров протечки сработал - отправить состаяние true в сенсор аварии
@@ -532,7 +637,9 @@ interval:
             lambda: |-
               return id(sensor_hot_water).state > id(boiler_control).target_temperature_high;
           then:
-            switch.turn_off: switch_boiler
+            - switch.turn_off: switch_boiler
+            - lambda: |-
+                id(manual_boiler_override) = false;  // Отменяем флаг ручного управления при автоматическом выключении
 
     # Скрипт автоматического управления вентилятором по влажности
       - if:
@@ -600,13 +707,14 @@ number:
   - platform: template
     name: "Верхний порог влажности"
     icon: mdi:waves-arrow-right
-    min_value: 0.0
-    max_value: 100.0
-    step: 1.0
+    min_value: 0
+    max_value: 100
+    step: 1
     optimistic: true
     id: upper_threshold_number
-    initial_value: 70.0
+    initial_value: 70
     restore_value: true
+    unit_of_measurement: "%"
     set_action:
       - lambda: |-
           id(upper_threshold) = x;
@@ -614,20 +722,21 @@ number:
   - platform: template
     name: "Нижний порог влажности"
     icon: mdi:waves-arrow-left
-    min_value: 0.0
-    max_value: 100.0
-    step: 1.0
+    min_value: 0
+    max_value: 100
+    step: 1
     optimistic: true
     id: lower_threshold_number
-    initial_value: 50.0
+    initial_value: 50
     restore_value: true
+    unit_of_measurement: "%"
     set_action:
       - lambda: |-
           id(lower_threshold) = x;
   # ======================================================================================
   # ==================  Пять временных интевалов работы вентиляции ===========================
   - platform: template
-    name: "Интервал 1: Начало (часы)"
+    name: "Интервал 1: Начало"
     icon: mdi:timer-sand
     id: start_hour_1
     min_value: 0
@@ -635,9 +744,12 @@ number:
     step: 1
     optimistic: true
     restore_value: true
+    unit_of_measurement: "ч"
+    mode: box
+    initial_value: 0
 
   - platform: template
-    name: "Интервал 1: Конец (часы)"
+    name: "Интервал 1: Конец"
     icon: mdi:timer-sand-complete
     id: end_hour_1
     min_value: 0
@@ -645,9 +757,12 @@ number:
     step: 1
     optimistic: true
     restore_value: true
+    unit_of_measurement: "ч"
+    mode: box
+    initial_value: 0
 
   - platform: template
-    name: "Интервал 2: Начало (часы)"
+    name: "Интервал 2: Начало"
     icon: mdi:timer-sand
     id: start_hour_2
     min_value: 0
@@ -655,9 +770,12 @@ number:
     step: 1
     optimistic: true
     restore_value: true
+    unit_of_measurement: "ч"
+    mode: box
+    initial_value: 0
 
   - platform: template
-    name: "Интервал 2: Конец (часы)"
+    name: "Интервал 2: Конец"
     icon: mdi:timer-sand-complete
     id: end_hour_2
     min_value: 0
@@ -665,9 +783,12 @@ number:
     step: 1
     optimistic: true
     restore_value: true
+    unit_of_measurement: "ч"
+    mode: box
+    initial_value: 0
 
   - platform: template
-    name: "Интервал 3: Начало (часы)"
+    name: "Интервал 3: Начало"
     icon: mdi:timer-sand
     id: start_hour_3
     min_value: 0
@@ -675,9 +796,12 @@ number:
     step: 1
     optimistic: true
     restore_value: true
+    unit_of_measurement: "ч"
+    mode: box
+    initial_value: 0
 
   - platform: template
-    name: "Интервал 3: Конец (часы)"
+    name: "Интервал 3: Конец"
     icon: mdi:timer-sand-complete
     id: end_hour_3
     min_value: 0
@@ -685,9 +809,12 @@ number:
     step: 1
     optimistic: true
     restore_value: true
+    unit_of_measurement: "ч"
+    mode: box
+    initial_value: 0
 
   - platform: template
-    name: "Интервал 4: Начало (часы)"
+    name: "Интервал 4: Начало"
     icon: mdi:timer-sand
     id: start_hour_4
     min_value: 0
@@ -695,9 +822,12 @@ number:
     step: 1
     optimistic: true
     restore_value: true
+    unit_of_measurement: "ч"
+    mode: box
+    initial_value: 0
 
   - platform: template
-    name: "Интервал 4: Конец (часы)"
+    name: "Интервал 4: Конец"
     icon: mdi:timer-sand-complete
     id: end_hour_4
     min_value: 0
@@ -705,9 +835,12 @@ number:
     step: 1
     optimistic: true
     restore_value: true
+    unit_of_measurement: "ч"
+    mode: box
+    initial_value: 0
 
   - platform: template
-    name: "Интервал 5: Начало (часы)"
+    name: "Интервал 5: Начало"
     icon: mdi:timer-sand
     id: start_hour_5
     min_value: 0
@@ -715,9 +848,12 @@ number:
     step: 1
     optimistic: true
     restore_value: true
+    unit_of_measurement: "ч"
+    mode: box
+    initial_value: 0
 
   - platform: template
-    name: "Интервал 5: Конец (часы)"
+    name: "Интервал 5: Конец"
     icon: mdi:timer-sand-complete
     id: end_hour_5
     min_value: 0
@@ -725,6 +861,9 @@ number:
     step: 1
     optimistic: true
     restore_value: true
+    unit_of_measurement: "ч"
+    mode: box
+    initial_value: 0
   # =============================================================================================
   # =================== Настройка времени подсветки =======================================
   - platform: template
@@ -732,7 +871,7 @@ number:
     icon: mdi:timer-sand-complete
     id: timerlight_enter
     mode: box
-    unit_of_measurement: s
+    unit_of_measurement: "сек"
     min_value: 5
     max_value: 360
     step: 1
@@ -821,13 +960,13 @@ remote_receiver:
               - switch.toggle: switch_ventil
               - rtttl.play: 'button_click:d=32,o=6,b=100:c'
 
-
+# ===============================================================================================================
 #     DOP CONNECTOR
 # 
 #    -------------
-#   | 1 (io12)    |
+#   | 1 (io18) ir |
 #   |             |
-#   | 2 (io18)    |
+#   | 2 (io12)    |
 #   |             |
 #   | 3 (5v)      |
 #   |             |
@@ -838,4 +977,4 @@ remote_receiver:
 #
 # Первый контакт помечен согластно схеме
 # На силовых контактах НОЛЬ помечен 
-#
+# ===================================================================================================================

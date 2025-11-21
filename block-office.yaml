@@ -388,14 +388,14 @@ interval:
               id(led_button_panel).turn_on()
                 .set_brightness(1.0)
                 .set_rgb(0, 1.0, 0)
-                .set_effect(id(led_effect_select).state.c_str())
+                .set_effect(id(led_effect_select).current_option())
                 .perform();
             } else {
               // Дверь открыта, включаем без эффектов
               id(led_button_panel).turn_on()
                 .set_brightness(0.7)
                 .set_rgb(0, 1.0, 0)
-                .set_effect("None")  // Явно сбрасываем эффект
+                .set_effect(id(led_effect_select).current_option())
                 .perform();
             }
             id(led_door).turn_on()

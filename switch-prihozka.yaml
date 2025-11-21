@@ -18,6 +18,8 @@ ota:
     password: "f4052abea6ea206d17a1cb68fbb73c04"
 
 wifi:
+  output_power: 12dB
+  power_save_mode: none
   networks:
     - ssid: IoT_Office
       password: "9514210798"
@@ -192,23 +194,23 @@ binary_sensor:
     on_multi_click:
       # one click
       - timing:
-        - ON for at most 0.5s
-        - OFF for at least 0.5s
+        - ON for at most 1.0s
+        - OFF for at least 0.8s
         then:
           - light.turn_on: prih_right_lamp
           - light.turn_off: led_light_lamp
 
-      # double click    
+      # double click
       - timing:
-          - ON for at most 0.5s
-          - OFF for at most 0.5s
-          - ON for at most 0.5s
-          - OFF for at least 0.5s
+          - ON for at most 1.0s
+          - OFF for at most 0.7s
+          - ON for at most 1.0s
+          - OFF for at least 0.8s
         then:
           - light.turn_on: prih_left_lamp
           - light.turn_off: led_light_lamp
 
-      # long press    
+      # long press
       - timing:
           - ON for at least 1.0s
         then:
@@ -218,7 +220,7 @@ binary_sensor:
 
       # long press    reboot
       - timing:
-          - ON for at least 10s
+          - ON for at least 5s
         then:
           - button.press: reboot
 
@@ -242,25 +244,24 @@ binary_sensor:
     on_multi_click:
       # one click
       - timing:
-        - ON for at most 0.5s
-        - OFF for at least 0.5s
+        - ON for at most 1.0s
+        - OFF for at least 0.8s
         then:
           - light.turn_on: holl_right_lamp
 
-      # double click    
+      # double click
       - timing:
-          - ON for at most 0.5s
-          - OFF for at most 0.5s
-          - ON for at most 0.5s
-          - OFF for at least 0.5s
+          - ON for at most 1.0s
+          - OFF for at most 0.7s
+          - ON for at most 1.0s
+          - OFF for at least 0.8s
         then:
           - light.turn_on: holl_left_lamp
-          
-      # long press    
+
+      # long press
       - timing:
           - ON for at least 1.0s
         then:
           - light.turn_off: holl_right_lamp
           - light.turn_off: holl_left_lamp
 # ====================================================================================
-
