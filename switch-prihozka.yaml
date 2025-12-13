@@ -194,18 +194,18 @@ binary_sensor:
     on_multi_click:
       # one click
       - timing:
-        - ON for at most 1.0s
-        - OFF for at least 0.8s
+        - ON for at most 0.5s
+        - OFF for at least 0.5s
         then:
           - light.turn_on: prih_right_lamp
           - light.turn_off: led_light_lamp
 
       # double click
       - timing:
-          - ON for at most 1.0s
-          - OFF for at most 0.7s
-          - ON for at most 1.0s
-          - OFF for at least 0.8s
+          - ON for at most 0.5s
+          - OFF for at most 0.5s
+          - ON for at most 0.5s
+          - OFF for at least 0.5s
         then:
           - light.turn_on: prih_left_lamp
           - light.turn_off: led_light_lamp
@@ -244,17 +244,17 @@ binary_sensor:
     on_multi_click:
       # one click
       - timing:
-        - ON for at most 1.0s
-        - OFF for at least 0.8s
+        - ON for at most 0.5s
+        - OFF for at least 0.5s
         then:
           - light.turn_on: holl_right_lamp
 
       # double click
       - timing:
-          - ON for at most 1.0s
-          - OFF for at most 0.7s
-          - ON for at most 1.0s
-          - OFF for at least 0.8s
+          - ON for at most 0.5s
+          - OFF for at most 0.5s
+          - ON for at most 0.5s
+          - OFF for at least 0.5s
         then:
           - light.turn_on: holl_left_lamp
 

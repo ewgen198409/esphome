@@ -36,8 +36,6 @@ external_components:
 logger:
 
 api:
-  # если отвалился api ha - ничего не делать
-#  reboot_timeout: 0s
   encryption:
     key: "AxmKtUF5x1HHDYVusVzUtAV4H8WE013HRPRmpt4afqM="
 
@@ -47,7 +45,11 @@ ota:
 
 wifi:
   id: wifi_id
-  output_power: 15dB
+  power_save_mode: LIGHT
+  manual_ip:
+    static_ip: 192.168.1.164
+    gateway: 192.168.1.1
+    subnet: 255.255.255.0
   networks:
     - ssid: IoT_Office
       password: "9514210798"
@@ -57,12 +59,6 @@ wifi:
   on_connect:
     then:
       - rtttl.play: 'scale_up:d=32,o=5,b=100:c,c#,d#,e,f#,g#,a#,b'
-
-  ap:
-    ssid: "Vodablock Fallback Hotspot"
-    password: "IMky0c0aKMCT"
-
-captive_portal:
 
 text_sensor:
   - platform: wifi_info
@@ -78,7 +74,7 @@ text_sensor:
       char str[17];
       time_t currTime = id(homeassistant_time).now().timestamp;
       strftime(str, sizeof(str), "%Y-%m-%d %H:%M", localtime(&currTime));
-      return  { str };
+      return std::string(str);
     update_interval: 60s
 
   # Таймер света Тело таймера находится в HA
@@ -123,15 +119,13 @@ button:
     icon: mdi:fire
     on_press:
       - lambda: |-
-          // Если реле уже включено - выключаем его и отменяем флаг
           if (id(switch_boiler).state) {
             id(switch_boiler).turn_off();
             id(manual_boiler_override) = false;
           } else {
-            // Если реле выключено - включаем его и устанавливаем флаг ручного управления
             id(switch_boiler).turn_on();
             id(manual_boiler_override) = true;
-          }  
+          }
 # ================== Init status led (on button) ===============
 status_led:
   id: led_status
@@ -281,11 +275,7 @@ binary_sensor:
     id: sensor_leak_2
     device_class: moisture
     lambda: |-
-      if (id(water_Level_2).state > 50) {
-        return true;
-      } else {
-        return false;
-      }
+      return id(water_Level_2).state > 50.0;
   # Аварийно выключить насос и боилер при обнаружении утечки
     on_press:
       then:
@@ -303,11 +293,7 @@ binary_sensor:
     id: sensor_leak_1
     device_class: moisture
     lambda: |-
-      if (id(water_Level_1).state > 50) {
-        return true;
-      } else {
-        return false;
-      }
+      return id(water_Level_1).state > 50.0;
   # Аварийно выключить насос и боилер при обнаружении утечки
     on_press:
       then:
@@ -624,9 +610,8 @@ interval:
       
       - if:
           condition:
-          # Если один из сенсоров протечки сработал - отправить состаяние true в сенсор аварии
             lambda: |-
-              return ((id(sensor_leak_1).state == true) || (id(sensor_leak_2).state == true));
+              return (id(sensor_leak_1).state || id(sensor_leak_2).state);
           then:
             lambda: |-
               id(water_alarm_fail).publish_state(true);
@@ -889,19 +874,19 @@ remote_receiver:
     - then:
         - if:
             condition:
-              lambda: 'return x.data == 0x807F40BF;'
+              lambda: |-
+                return x.data == 0x807F40BF;
             then:
               - lambda: |-
-                  // Переключаем термостат
                   if (id(boiler_control).mode == CLIMATE_MODE_HEAT) {
                     id(boiler_control).mode = CLIMATE_MODE_OFF;
-                    id(boiler_display_state) = 2;  // OFF
+                    id(boiler_display_state) = 2;
                   } else {
                     id(boiler_control).mode = CLIMATE_MODE_HEAT;
-                    id(boiler_display_state) = 1;  // ON
-                    id(switch_boiler).turn_on();  // Включаем реле бойлера
+                    id(boiler_display_state) = 1;
+                    id(switch_boiler).turn_on();
                   }
-                  id(boiler_display_timeout) = 13;  // 4 секунды (300ms * 13 = 3.9s)
+                  id(boiler_display_timeout) = 13;
               - if:
                   condition:
                     lambda: 'return id(boiler_display_state) == 1;'

@@ -20,7 +20,6 @@ preferences:
 #   update_interval: 5s
 
 api:
-  reboot_timeout: 0s
   encryption:
     key: "KOWDAA8XBu8jM5F884wvQ6ji5Mhwm2J29yZXx2C9Kko="
 
@@ -29,8 +28,12 @@ ota:
     password: "9aa6e161a6c491657f320a1b15fde731"
 
 wifi:
-  output_power: 12dB
-  power_save_mode: none
+  id: wifi_hub
+  power_save_mode: LIGHT
+  manual_ip:
+    static_ip: 192.168.1.110
+    gateway: 192.168.1.1
+    subnet: 255.255.255.0
   networks:
     - ssid: WiFi_IoT
       password: "ewgeniy507388"
