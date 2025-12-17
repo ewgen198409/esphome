@@ -21,6 +21,11 @@ ota:
     password: "3a2b0c2cc547a398831e1f0a8119c649"
 
 wifi:
+  manual_ip:
+    static_ip: 192.168.1.154
+    gateway: 192.168.1.1
+    subnet: 255.255.255.0
+  use_address: 192.168.1.154  # Используйте IP вместо .local
   networks:
     - ssid: Keenetic-Home
       password: "9994554500"
@@ -30,11 +35,14 @@ wifi:
     then:
       - script.execute: blink_blue_leds # Вызываем скрипт для мигания синим
 
-
   ap:
     ssid: "Block-Office Fallback Hotspot"
     password: "olFKLbjgUvHS"
 
+# Отключить mDNS
+mdns:
+  disabled: true
+  
 captive_portal:
 # ================= TIME ====================================
 time:

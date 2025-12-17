@@ -55,11 +55,15 @@ wifi:
       password: "9514210798"
     - ssid: Keenetic-Home
       password: "9994554500"
-  use_address: vodablock.local
+  use_address: 192.168.1.164  # Используйте IP вместо .local
   on_connect:
     then:
       - rtttl.play: 'scale_up:d=32,o=5,b=100:c,c#,d#,e,f#,g#,a#,b'
 
+# Отключить mDNS
+mdns:
+  disabled: true
+  
 text_sensor:
   - platform: wifi_info
     ip_address:

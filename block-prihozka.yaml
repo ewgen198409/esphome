@@ -39,7 +39,11 @@ wifi:
       password: "ewgeniy507388"
     - ssid: Keenetic-Home
       password: "9994554500"
+  use_address: 192.168.1.110  # Используйте IP вместо .local
 
+# Отключить mDNS
+mdns:
+  disabled: true
   # ap:
   #   ssid: "Block-Prihozka Fallback Hotspot"
   #   password: "mXyPb1kexKGo"
