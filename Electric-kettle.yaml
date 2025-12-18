@@ -93,14 +93,14 @@ script:
 switch:
   - platform: gpio
     internal: true
-    pin: 
+    pin:
       number: GPIO00
       inverted: true
       mode:
         output: true
     name: "Нагрев"
     id: relay
-    restore_mode: RESTORE_DEFAULT_OFF
+    restore_mode: ALWAYS_OFF
     icon: mdi:kettle-steam-outline
     on_turn_on:
       - rtttl.play: 'scale_up:d=32,o=5,b=100:c,d,e,f,g'
