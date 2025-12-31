@@ -56,10 +56,12 @@ wifi:
       password: "9514210798"
     - ssid: OpenWrt_Garage
       password: "9514210798"
-
-  ap:
-    ssid: "Garage Fallback Hotspot"
-    password: "00000000"
+      manual_ip:
+        static_ip: 192.168.1.127
+        gateway: 192.168.1.1
+        subnet: 255.255.255.0
+        dns1: 192.168.1.1
+  use_address: 192.168.1.127
 
 captive_portal:
 
