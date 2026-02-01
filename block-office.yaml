@@ -26,24 +26,15 @@ wifi:
     gateway: 192.168.1.1
     subnet: 255.255.255.0
   use_address: 192.168.1.154  # Используйте IP вместо .local
-  networks:
-    - ssid: Keenetic-Home
-      password: "9994554500"
-    - ssid: IoT_Office
-      password: "9514210798"
+  <<: !include networks.yaml
   on_connect:
     then:
       - script.execute: blink_blue_leds # Вызываем скрипт для мигания синим
 
-  ap:
-    ssid: "Block-Office Fallback Hotspot"
-    password: "olFKLbjgUvHS"
-
 # Отключить mDNS
 mdns:
   disabled: true
-  
-captive_portal:
+
 # ================= TIME ====================================
 time:
   - platform: sntp
@@ -55,8 +46,8 @@ time:
 # ===============================================================
 button:
   - platform: restart
-    name: Restart
-    id: reboot 
+    name: Reboot
+    id: reboot
 
 text_sensor:
   - platform: wifi_info

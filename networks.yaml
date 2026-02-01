@@ -1,0 +1,11 @@
+networks:
+  - ssid: "OpenWrt"
+    password: "9514210798"
+  - ssid: "IoT_Office"
+    password: "9514210798"
+  - ssid: "Keenetic-Home"
+    password: "9994554500"
+  - ssid: "OpenWrt_Garage"
+    password: "EwGeNiY507388"
+  - ssid: "IoT"
+    password: "EwGeNiY507388"

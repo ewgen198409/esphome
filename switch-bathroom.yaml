@@ -1,0 +1,186 @@
+esphome:
+  name: switch-bathroom
+
+esp8266:
+  board: d1_mini
+  restore_from_flash: true
+
+logger:
+
+api:
+  reboot_timeout: 0s
+  encryption:
+    key: "x3CRC91sDNSAUUCrCYm/qz2gvVJJ/RKmtD/Wq1g8hXQ="
+
+ota:
+  - platform: esphome
+    password: "f4050abea6ea206d17a1cb68fbb73c04"
+
+wifi:
+  <<: !include networks.yaml
+  use_address: 192.168.1.141  # Используйте IP вместо .local
+  manual_ip:
+    static_ip: 192.168.1.141
+    gateway: 192.168.1.1
+    subnet: 255.255.255.0
+
+# Отключить mDNS
+mdns:
+  disabled: true
+
+# mqtt:
+#   broker: 192.168.1.230
+#   username: "hassmqtt"
+#   password: "hassmqtt"
+
+text_sensor:
+  - platform: wifi_info
+    ip_address:
+      name: IP Address
+    ssid:
+      name: SSID
+
+button:
+  - platform: restart
+    name: Restart 
+    id: reboot
+
+sensor:
+  - platform: dht
+    pin: GPIO4
+    model: DHT11
+    temperature:
+      name: "Bathroom Temperature"
+      accuracy_decimals: 1
+    humidity:
+      name: "Bathroom Humidity"
+      accuracy_decimals: 1
+    update_interval: 30s
+
+output:
+  # Подсветка кнопки (PWM) - GPIO13
+  - platform: esp8266_pwm
+    pin: GPIO13
+    id: backlight_pwm
+    frequency: 1000Hz
+
+  # Реле 1 и 2 (Свет) - тип Реле_i (Инвертированные) 
+  - platform: gpio
+    pin: { number: GPIO0, inverted: true }
+    id: relay_1_output
+
+  - platform: gpio
+    pin: { number: GPIO2, inverted: true }
+    id: relay_2_output
+
+light:
+  # Подсветка (PWM) - управление яркостью
+  - platform: monochromatic
+    output: backlight_pwm
+    name: "Switch Backlight"
+    id: backlight
+    restore_mode: RESTORE_DEFAULT_ON
+    effects:
+      - pulse:
+          name: "Fast Pulse"
+          transition_length: 0.2s
+          update_interval: 0.2s
+          min_brightness: 0%
+          max_brightness: 100%
+      - pulse:
+          name: "Slow Pulse"
+          transition_length: 1000ms
+          update_interval: 2s
+
+  - platform: status_led
+    name: "Status led"
+    internal: True
+    pin:
+      number: GPIO12
+      inverted: false
+
+
+  # Реле 1 и 2 (Свет) - тип Реле_i (Инвертированные) 
+  - platform: binary
+    output: relay_1_output
+    name: "Light 1"
+    id: light_1
+    restore_mode: RESTORE_DEFAULT_OFF
+
+  - platform: binary
+    output: relay_2_output
+    name: "Light 2"
+    id: light_2
+    restore_mode: RESTORE_DEFAULT_OFF
+
+binary_sensor:
+  # Датчик движения (Свич_n - инвертированный) 
+  - platform: gpio
+    pin: 
+      number: GPIO5
+      mode: INPUT_PULLUP
+      inverted: false
+    name: "Bathroom Motion"
+    device_class: motion
+
+  # Кнопка (GPIO14) с полной логикой ваших Rules [cite: 1, 2]
+  - platform: gpio
+    id: bathroom_button
+    name: "Bathroom Button"
+    internal: true
+    pin:
+      number: GPIO14
+      mode: INPUT_PULLUP
+      inverted: true
+    on_press:
+      then:
+        - light.turn_on:
+            id: backlight
+            effect: "Fast Pulse"
+
+    on_multi_click:
+      # Одинарное нажатие (state=10)
+      - timing:
+          - ON for at most 0.5s
+          - OFF for at least 0.5s
+        then:
+          - light.turn_on: light_1
+          - light.turn_off: backlight
+      
+      # Двойное нажатие (state=11)
+      - timing:
+          - ON for at most 0.5s
+          - OFF for at most 0.5s
+          - ON for at most 0.5s
+          - OFF for at least 0.5s
+        then:
+          - light.turn_on: light_2
+          - light.turn_off: backlight
+
+      # Тройное нажатие (state=12)
+      - timing:
+          - ON for at most 0.5s
+          - OFF for at most 0.5s
+          - ON for at most 0.5s
+          - OFF for at most 0.5s
+          - ON for at most 0.5s
+        then:
+          - light.turn_on: light_1
+          - light.turn_on: light_2
+          - light.turn_off: backlight
+
+      # Длинное нажатие / Удержание (state=3)
+      - timing:
+          - ON for at least 1s
+        then:
+          - light.turn_off: light_1
+          - light.turn_off: light_2
+          - light.turn_on:
+              id: backlight
+              effect: "Slow Pulse"
+
+      # long press    reboot
+      - timing:
+          - ON for at least 5s
+        then:
+          - button.press: reboot

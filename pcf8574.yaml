@@ -50,20 +50,13 @@ ota:
   - platform: esphome
 
 wifi:
-  networks:
-    - ssid: "IoT_Office"
-      id: wifi_id
-      password: "9514210798"
-    - ssid: OpenWrt_Garage
-      password: "9514210798"
-      manual_ip:
-        static_ip: 192.168.1.127
-        gateway: 192.168.1.1
-        subnet: 255.255.255.0
-        dns1: 192.168.1.1
-  use_address: 192.168.1.127
-
-captive_portal:
+  <<: !include networks.yaml
+  manual_ip:
+    static_ip: 192.168.1.128
+    gateway: 192.168.1.1
+    subnet: 255.255.255.0
+    dns1: 192.168.1.1
+  use_address: 192.168.1.128
 
 text_sensor:
   - platform: wifi_info

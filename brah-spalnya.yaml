@@ -16,29 +16,18 @@ bk72xx:
 api:
   encryption:
     key: "A+xLM79G2f7hVt1VqNu2u090EHyfxqGEUhjZ1ZYZZ9I="
-  reboot_timeout: 1800s
 
 ota:
   platform: esphome
-  
+
 wifi:
-  networks:
-    - ssid: WiFi_IoT
-      password: "ewgeniy507388"
-    - ssid: Keenetic-Home
-      password: "9994554500"
-    - ssid: IoT_Office
-      password: "9514210798"
-  use_address: brah-spalnya.local
+  <<: !include networks.yaml
   # manual_ip:
   #   static_ip: 192.168.1.126
   #   gateway: 192.168.1.1
   #   subnet: 255.255.255.0
   #   dns1: 77.88.8.8
   # Enable fallback hotspot (captive portal) in case wifi connection fails
-  ap:
-    ssid: "Brah-Spalnya Fallback Hotspot"
-    password: "BKjXhbhhYvcb"
 
 udp:
   id: udp_hub
@@ -142,4 +131,3 @@ light:
 #  pin:
 #    number: P7
 #    inverted: true
-    

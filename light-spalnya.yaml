@@ -23,11 +23,7 @@ ota:
   password: "1ed8692bea4dd2b457b73501f671d338"
 
 wifi:
-  networks:
-    - ssid: Keenetic-Home
-      password: "9994554500"
-    - ssid: IoT_Office
-      password: "9514210798"
+  <<: !include networks.yaml
   use_address: light-spalnya.local
   # manual_ip:
   #   static_ip: 192.168.1.109

@@ -18,19 +18,7 @@ ota:
     password: "f4052abea6ea206d17a1cb68fbb73c04"
 
 wifi:
-  output_power: 12dB
-  power_save_mode: none
-  networks:
-    - ssid: IoT_Office
-      password: "9514210798"
-    - ssid: Keenetic-Home
-      password: "9994554500"
-
-  ap:
-    ssid: "Switch-Prihozka Fallback Hotspot"
-    password: "pnqeILCgMjbn"
-
-captive_portal:
+  <<: !include networks.yaml
 
 udp:
   id: udp_hub

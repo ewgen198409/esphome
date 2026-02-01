@@ -34,29 +34,22 @@ wifi:
     static_ip: 192.168.1.110
     gateway: 192.168.1.1
     subnet: 255.255.255.0
-  networks:
-    - ssid: WiFi_IoT
-      password: "ewgeniy507388"
-    - ssid: Keenetic-Home
-      password: "9994554500"
   use_address: 192.168.1.110  # Используйте IP вместо .local
+  <<: !include networks.yaml
 
 # Отключить mDNS
 mdns:
   disabled: true
-  # ap:
-  #   ssid: "Block-Prihozka Fallback Hotspot"
-  #   password: "mXyPb1kexKGo"
-
 
 # ===================== MQTT ========================================
 mqtt:
-  broker: 192.168.1.1
+  broker: 192.168.1.230
   port: 1883
+  username: hassmqtt
+  password: hassmqtt
   discovery: false
   discover_ip: false
 # ======================================================================
-captive_portal:
 
 # ================= TIME ====================================
 time:

@@ -50,11 +50,7 @@ wifi:
     static_ip: 192.168.1.164
     gateway: 192.168.1.1
     subnet: 255.255.255.0
-  networks:
-    - ssid: IoT_Office
-      password: "9514210798"
-    - ssid: Keenetic-Home
-      password: "9994554500"
+  <<: !include networks.yaml
   use_address: 192.168.1.164  # Используйте IP вместо .local
   on_connect:
     then:
@@ -99,7 +95,7 @@ text_sensor:
   - platform: homeassistant
     id: motion_sensor
     name: Сенсор движения в ванной
-    entity_id: binary_sensor.svet_vannaia_switch1
+    entity_id: binary_sensor.switch_bathroom_bathroom_motion_2
     on_value:
       then:
         - if:
@@ -384,7 +380,8 @@ sensor:
   - platform: homeassistant
     id: humidity_bathroom
     name: Сенсор влажности в ванной
-    entity_id: sensor.bathroom_dht11_humidity
+    internal: false
+    entity_id: sensor.switch_bathroom_bathroom_humidity_2
 
 # =================================================================================
   - platform: uptime
