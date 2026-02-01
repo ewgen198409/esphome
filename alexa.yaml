@@ -26,12 +26,8 @@ ota:
     password: "312f283a0164fce9b713ecd13a3cf624"
 
 wifi:
-  networks:
-    - ssid: "IoT_Office"
-      password: "9514210798"
-    - ssid: "OpenWrt_Garage"
-      password: "9514210798"
-
+  <<: !include networks.yaml
+  use_address: 192.168.1.220
   fast_connect: false
   power_save_mode: none
   on_connect:
@@ -48,6 +44,10 @@ wifi:
       - lambda: |-
           id(led_ww).turn_off().perform();
 
+# Отключить mDNS
+mdns:
+  disabled: true
+  
 deep_sleep:
   id: deep_sleep_1
   wakeup_pin:
