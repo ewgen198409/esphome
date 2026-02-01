@@ -4,7 +4,7 @@ substitutions:
   auto_light_brightness: 80% # Яркость автоподсветки
 
 esphome:
-  name: pcf8574
+  name: block-garage
   platformio_options:
     board_build.flash_mode: dio
     board_build.ldscript: eagle.flash.4m1m.ld  # <-- Кастомный скрипт 1.5mb-flash, 1.5mb-OTA 
