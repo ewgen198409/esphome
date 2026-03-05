@@ -17,7 +17,11 @@ ota:
     password: "f4050abea6ea206d17a1cb68fbb73c04"
 
 wifi:
-  <<: !include networks.yaml
+  networks:
+    - ssid: "IoT"
+      password: "EwGeNiY507388"
+      hidden: true
+      
   use_address: 192.168.1.141  # Используйте IP вместо .local
   manual_ip:
     static_ip: 192.168.1.141

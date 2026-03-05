@@ -1,5 +1,8 @@
-esphome:
+substitutions:
   name: garage-kotel
+
+esphome:
+  name: ${name}
 
 bk72xx:
   board: generic-bk7231t-qfn32-tuya
@@ -20,9 +23,8 @@ packet_transport:
     binary_sensors:
       - kotel_state
 
-
-
 logger:
+
 wifi:
   <<: !include networks.yaml
   manual_ip:
@@ -32,18 +34,58 @@ wifi:
     dns1: 192.168.1.1
   use_address: 192.168.1.218
 
-# Отключить mDNS
 mdns:
   disabled: true
 
 time:
   - platform: sntp
     id: ntp_time
-    timezone: UTC-06:00
+    timezone: Asia/Omsk  # Проверь часовой пояс, в прошлом конфиге был Омск
     servers:
       - 0.openwrt.pool.ntp.org
       - 1.openwrt.pool.ntp.org
-      - 2.openwrt.pool.ntp.org
+      - 192.168.1.1 
+
+# Глобальные переменные
+globals:
+  - id: thermostat_state_before_peak
+    type: bool
+    initial_value: 'false'
+  - id: in_peak
+    type: bool
+    initial_value: 'false'
+  - id: manual_override
+    type: bool
+    initial_value: 'false'
+
+# Скрипт мигания светодиодом статуса (P7)
+script:
+  - id: blink_status_led
+    mode: restart
+    then:
+      - while:
+          condition:
+            lambda: 'return id(in_peak);'
+          then:
+            - light.turn_on: status_led_light
+            - delay: 500ms
+            - light.turn_off: status_led_light
+            - delay: 2000ms
+
+light:
+  - platform: binary
+    name: "Status LED"
+    id: status_led_light
+    output: led_pin
+    internal: true
+
+output:
+  - platform: gpio
+    id: led_pin
+    pin:
+      number: P7
+      inverted: true
+
 button:
   - platform: restart
     name: Restart
@@ -52,16 +94,12 @@ text_sensor:
   - platform: wifi_info
     ip_address:
       name: IP Address
-    ssid:
-      name: SSID
-
-  # Сенсор времени ESPHOME
   - platform: template
     name: "Current time"
     lambda: |-
-      char str[17];
+      char str[20];
       time_t currTime = id(ntp_time).now().timestamp;
-      strftime(str, sizeof(str), "%Y-%m-%d %X", localtime(&currTime));
+      strftime(str, sizeof(str), "%Y-%m-%d %H:%M", localtime(&currTime));
       return std::string(str);
     update_interval: 60s
 
@@ -74,6 +112,10 @@ sensor:
     remote_id: garage_temp
     id: garage_temp
     internal: true
+    filters:
+      - timeout:
+          timeout: 15min
+          value: nan # Защита: если сеть упала, котел не перегреет гараж
 
   - platform: packet_transport
     provider: co2-sensor-garage
@@ -81,27 +123,21 @@ sensor:
     id: garage_hum
     internal: true
 
-# ================== Счетик времени включенного котла =======================
   - platform: duty_time
     id: kotel_work_time
-    name: Время работы котла
-    icon: mdi:alarm-plus
-    update_interval: 10s
-    accuracy_decimals: 0
-    device_class: duration
+    name: "Время работы котла"
+    update_interval: 30s
     lambda: "return id(switch_1).state;"
     restore: true
-    last_time:
-      name: Kotel посл. время работы
-# ===================================================================================
+
   - platform: wifi_signal
-    name: WiFi Strength ${device_name}
-    update_interval: 60s
+    name: WiFi Strength
     id: wifi_signal_db
+
 
   - platform: copy # Reports the WiFi signal strength in %
     source_id: wifi_signal_db
-    name: "WiFi Signal Percent"
+    name: WiFi Signal ${name}
     filters:
       - lambda: return min(max(2 * (x + 100.0), 0.0), 100.0);
     unit_of_measurement: "%"
@@ -109,40 +145,31 @@ sensor:
     device_class: ""
 
 binary_sensor:
+  # ФИЗИЧЕСКАЯ КНОПКА (P6)
   - platform: gpio
     id: binary_switch_1
     pin:
       number: P6
       inverted: true
       mode: INPUT_PULLUP
-    on_state:
+    on_press:
       then:
         - lambda: |-
-            static bool last_state = false;
-            if (x && !last_state) {  // Нажатие кнопки (переход в true)
-              auto call = id(thermostat_garage_kotel).make_call();
-              if (id(thermostat_garage_kotel).mode == climate::CLIMATE_MODE_HEAT) {
-                call.set_mode(climate::CLIMATE_MODE_OFF);
-              } else {
-                call.set_mode(climate::CLIMATE_MODE_HEAT);
+            auto call = id(thermostat_garage_kotel).make_call();
+            bool is_heating = (id(thermostat_garage_kotel).mode == climate::CLIMATE_MODE_HEAT);
+            if (is_heating) {
+              call.set_mode(climate::CLIMATE_MODE_OFF);
+              id(manual_override) = false;
+            } else {
+              call.set_mode(climate::CLIMATE_MODE_HEAT);
+              if (id(in_peak)) {
+                id(manual_override) = true;
+                ESP_LOGI("manual", "Котёл: ручной перехват в пик (кнопка)");
               }
-              call.perform();
             }
-            last_state = x;
+            call.perform();
 
-  # Бинарный сенсор для публикации состояния термостата
-  - platform: template
-    id: kotel_state
-    name: Kotel state
-    internal: false
-    lambda: |-
-      if (id(thermostat_garage_kotel).mode == climate::CLIMATE_MODE_HEAT) {
-        return true;  // ON когда в режиме HEAT
-      } else {
-        return false; // OFF для всех других режимов
-      }
-
-  # Бинарный сенсор для приема команды с pcf8574
+  # КОМАНДЫ ПО UDP
   - platform: packet_transport
     id: kotel_command
     internal: true
@@ -154,59 +181,58 @@ binary_sensor:
             auto call = id(thermostat_garage_kotel).make_call();
             call.set_mode(climate::CLIMATE_MODE_HEAT);
             call.perform();
+            if (id(in_peak)) {
+              id(manual_override) = true;
+              ESP_LOGI("udp", "Котёл: ручной перехват в пик (UDP)");
+            }
     on_release:
       then:
         - lambda: |-
             auto call = id(thermostat_garage_kotel).make_call();
             call.set_mode(climate::CLIMATE_MODE_OFF);
             call.perform();
+            id(manual_override) = false;
 
+  - platform: template
+    id: kotel_state
+    name: Kotel state
+    lambda: 'return id(thermostat_garage_kotel).mode == climate::CLIMATE_MODE_HEAT;'
 
 switch:
   - platform: gpio
     id: switch_1
-    name: Relay 1
+    name: Relay Kotel
     pin: P24
 
-  # Выключатель отпления в пиковую зону
   - platform: template
     name: "Не включать в ПИК"
     optimistic: true
-    icon: mdi:clock
     id: switch_peack_off
     restore_mode: RESTORE_DEFAULT_ON
-
-status_led:
-  pin:
-    number: P7
-    inverted: true
-
-# Глобальные переменные для пикового времени
-globals:
-  - id: thermostat_state_before_peak
-    type: bool
-    initial_value: 'false'
-  - id: in_peak
-    type: bool
-    initial_value: 'false'
+    on_turn_off:
+      then:
+        - lambda: |-
+            id(manual_override) = false;
+            if (id(in_peak) && id(thermostat_state_before_peak)) {
+              auto call = id(thermostat_garage_kotel).make_call();
+              call.set_mode(climate::CLIMATE_MODE_HEAT);
+              call.perform();
+            }
 
 climate:
   - platform: thermostat
     id: thermostat_garage_kotel
     name: "Thermostat Garage Kotel"
+    sensor: garage_temp
+    humidity_sensor: garage_hum
+    # Новые обязательные параметры:
+    min_heating_off_time: 30s
+    min_heating_run_time: 30s
+    min_idle_time: 30s
     visual:
       min_temperature: 5
       max_temperature: 25
-      temperature_step:
-        target_temperature: 1.0
-        current_temperature: 0.1
-    sensor: garage_temp
-    humidity_sensor: garage_hum
-    min_heating_off_time: 10s
-    min_heating_run_time: 10s
-    min_idle_time: 10s
     heat_deadband: 1.0
-    heat_overrun: 0.0
     heat_action:
       - switch.turn_on: switch_1
     idle_action:
@@ -226,29 +252,44 @@ interval:
         if (!now.is_valid()) return;
         
         int hour = now.hour;
-        
-        // Определяем пиковое время: утро 7:00-10:00, вечер 17:00-21:00
         bool is_peak = (hour >= 7 && hour < 10) || (hour >= 17 && hour < 21);
-        bool was_in_peak = id(in_peak);
-        
-        if (is_peak && !was_in_peak && id(switch_peack_off).state) {
-          {
-          // Вход в пиковое время - сохраняем состояние
-          id(thermostat_state_before_peak) = (id(thermostat_garage_kotel).mode == climate::CLIMATE_MODE_HEAT);
+        bool peak_switch = id(switch_peack_off).state;
+
+        // Вход в пик
+        if (is_peak && !id(in_peak)) {
           id(in_peak) = true;
-          // Выключаем термостат
-          auto call = id(thermostat_garage_kotel).make_call();
-          call.set_mode(climate::CLIMATE_MODE_OFF);
-          call.perform();
+          id(manual_override) = false;
+          id(blink_status_led).execute();
+          
+          if (peak_switch) {
+            id(thermostat_state_before_peak) = (id(thermostat_garage_kotel).mode == climate::CLIMATE_MODE_HEAT);
+            auto call = id(thermostat_garage_kotel).make_call();
+            call.set_mode(climate::CLIMATE_MODE_OFF);
+            call.perform();
+            ESP_LOGI("peak", "Пик котла: выключаем");
           }
-        } else if (!is_peak && was_in_peak) {
-          {
-          // Выход из пикового времени - восстанавливаем состояние
+        }
+        
+        // Выход из пика
+        else if (!is_peak && id(in_peak)) {
           id(in_peak) = false;
-          if (id(thermostat_state_before_peak)) {
+          id(manual_override) = false;
+          id(blink_status_led).stop();
+          id(status_led_light).turn_off().perform();
+          
+          if (peak_switch && id(thermostat_state_before_peak)) {
             auto call = id(thermostat_garage_kotel).make_call();
             call.set_mode(climate::CLIMATE_MODE_HEAT);
             call.perform();
+            ESP_LOGI("peak", "Пик котла: восстановление");
           }
+        }
+        
+        // Защита от включения в пик без override
+        if (is_peak && peak_switch && !id(manual_override)) {
+          if (id(thermostat_garage_kotel).mode == climate::CLIMATE_MODE_HEAT) {
+            auto call = id(thermostat_garage_kotel).make_call();
+            call.set_mode(climate::CLIMATE_MODE_OFF);
+            call.perform();
           }
         }

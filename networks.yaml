@@ -9,3 +9,4 @@ networks:
     password: "EwGeNiY507388"
   - ssid: "IoT"
     password: "EwGeNiY507388"
+    hidden: true

@@ -18,7 +18,11 @@ ota:
     password: "f4052abea6ea206d17a1cb68fbb73c04"
 
 wifi:
-  <<: !include networks.yaml
+  networks:
+    - ssid: "IoT"
+      password: "EwGeNiY507388"
+      hidden: true
+      
 
 udp:
   id: udp_hub

@@ -35,7 +35,10 @@ wifi:
     gateway: 192.168.1.1
     subnet: 255.255.255.0
   use_address: 192.168.1.110  # Используйте IP вместо .local
-  <<: !include networks.yaml
+  networks:
+    - ssid: "IoT"
+      password: "EwGeNiY507388"
+      hidden: true
 
 # Отключить mDNS
 mdns:

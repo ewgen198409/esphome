@@ -23,14 +23,11 @@ ota:
   password: "1ed8692bea4dd2b457b73501f671d338"
 
 wifi:
-  <<: !include networks.yaml
-  use_address: light-spalnya.local
-  # manual_ip:
-  #   static_ip: 192.168.1.109
-  #   gateway: 192.168.1.1
-  #   subnet: 255.255.255.0
-  #   dns1: 77.88.8.8
-# Отправляем в сеть свой бинарный сенсор (binary_switch)
+  networks:
+    - ssid: "IoT"
+      password: "EwGeNiY507388"
+      hidden: true
+      
 udp:
   id: udp_hub
 

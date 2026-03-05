@@ -27,7 +27,7 @@ ota:
 
 wifi:
   <<: !include networks.yaml
-  use_address: 192.168.1.220
+  use_address: 192.168.1.214
   fast_connect: false
   power_save_mode: none
   on_connect:

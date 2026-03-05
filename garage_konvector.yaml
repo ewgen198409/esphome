@@ -1,7 +1,3 @@
-# GPIO0 — кнопка (это понятно, когда мы включали бутлоадер)
-# GPIO12 — красный светодиод и реле
-# GPIO13 — синий светодиод
-# GPIO14 и GPIO4 выведены на разъем подключения датчиков.
 substitutions:
   name: garage-konvector
 
@@ -11,13 +7,38 @@ esphome:
 esp8266:
   board: sonoff_th
   restore_from_flash: true
-  
+
+# Глобальные переменные для логики
+globals:
+  - id: thermostat_state_before_peak
+    type: bool
+    initial_value: 'false'
+  - id: in_peak
+    type: bool
+    initial_value: 'false'
+  - id: manual_override
+    type: bool
+    initial_value: 'false'
+
+# Скрипт мигания синим светодиодом (индикация пика)
+script:
+  - id: blink_blue_led
+    mode: restart
+    then:
+      - while:
+          condition:
+            lambda: 'return id(in_peak);'
+          then:
+            - light.turn_on: blue_led
+            - delay: 500ms
+            - light.turn_off: blue_led
+            - delay: 2000ms
+
 udp:
   id: udp_hub
 
 packet_transport:
   - platform: udp
-    # Бинарные сенсоры, которые мы публикуем для других устройств
     binary_sensors:
       - konvector_state
 
@@ -33,30 +54,16 @@ ota:
 
 wifi:
   <<: !include networks.yaml
+  min_auth_mode: WPA2
   manual_ip:
     static_ip: 192.168.1.245
     gateway: 192.168.1.1
     subnet: 255.255.255.0
     dns1: 192.168.1.1
-  use_address: 192.168.1.245  # Используйте IP вместо .local
+  use_address: 192.168.1.245
 
-# Отключить mDNS
 mdns:
   disabled: true
-
-captive_portal:
-time:
-  - platform: sntp
-    id: ntp_time
-    timezone: Asia/Omsk
-    servers:
-      - 0.openwrt.pool.ntp.org
-      - 1.openwrt.pool.ntp.org
-      - 192.168.1.1 
-
-button:
-  - platform: restart
-    name: Restart
 
 text_sensor:
   - platform: wifi_info
@@ -67,18 +74,36 @@ text_sensor:
 
   - platform: template
     name: "Current time"
+    id: current_time_str
     lambda: |-
-      char str[17];
+      char str[20];
       time_t currTime = id(ntp_time).now().timestamp;
-      strftime(str, sizeof(str), "%Y-%m-%d %X", localtime(&currTime));
+      strftime(str, sizeof(str), "%H:%M:%S", localtime(&currTime));
       return std::string(str);
-    update_interval: 60s
+    update_interval: 5s # Для отладки лучше чаще, потом можно 60s
+
+time:
+  - platform: sntp
+    id: ntp_time
+    timezone: Asia/Omsk
+    servers:
+      - 0.openwrt.pool.ntp.org
+      - 1.openwrt.pool.ntp.org
+      - 192.168.1.1 
 
 light:
   - platform: monochromatic
     name: "Blue LED"
-    output: blue_led
+    output: blue_led_output # Ссылаемся на новый ID выхода
+    id: blue_led
     internal: true
+    restore_mode: ALWAYS_OFF
+
+output:
+  - platform: esp8266_pwm
+    id: blue_led_output # Даем уникальный ID железному пину
+    pin: GPIO13
+    inverted: True
 
 switch:
   - platform: gpio
@@ -86,21 +111,24 @@ switch:
     name: Relay ${name}
     pin: GPIO12
 
-  # Выключатель отпления в пиковую зону
   - platform: template
     name: "Выключать ${name} в ПИК"
     optimistic: true
     icon: mdi:clock
     id: switch_peack_off
     restore_mode: RESTORE_DEFAULT_ON
-
-output:
-  - platform: esp8266_pwm
-    id: blue_led
-    pin: GPIO13
-    inverted: True
+    on_turn_off:
+      then:
+        - lambda: |-
+            id(manual_override) = false;
+            if (id(in_peak) && id(thermostat_state_before_peak)) {
+              auto call = id(thermostat_garage_konvector).make_call();
+              call.set_mode(climate::CLIMATE_MODE_HEAT);
+              call.perform();
+            }
 
 binary_sensor:
+  # ФИЗИЧЕСКАЯ КНОПКА (с логикой Override)
   - platform: gpio
     pin:
       number: GPIO0
@@ -108,36 +136,31 @@ binary_sensor:
       inverted: True
     name: "Button ${name}"
     internal: true
-    on_state:
+    on_press:
       then:
         - lambda: |-
-            static bool last_state = false;
-            if (x && !last_state) {  // Нажатие кнопки (переход в true)
-              auto call = id(thermostat_garage_konvector).make_call();
-              if (id(thermostat_garage_konvector).mode == climate::CLIMATE_MODE_HEAT) {
-                call.set_mode(climate::CLIMATE_MODE_OFF);
-              } else {
-                call.set_mode(climate::CLIMATE_MODE_HEAT);
+            auto call = id(thermostat_garage_konvector).make_call();
+            bool is_heating = (id(thermostat_garage_konvector).mode == climate::CLIMATE_MODE_HEAT);
+            
+            if (is_heating) {
+              call.set_mode(climate::CLIMATE_MODE_OFF);
+              id(manual_override) = false; 
+            } else {
+              call.set_mode(climate::CLIMATE_MODE_HEAT);
+              if (id(in_peak)) {
+                id(manual_override) = true;
+                ESP_LOGI("manual", "Ручной перехват в пик (кнопка)");
               }
-              call.perform();
             }
-            last_state = x;
+            call.perform();
 
-
-# Сенсор для UDP climate ==========================================================================================
-  # Бинарный сенсор для публикации состояния термостата
+  # СТАТУС ДЛЯ UDP
   - platform: template
     id: konvector_state
     name: Konvector state
-    internal: false
-    lambda: |-
-      if (id(thermostat_garage_konvector).mode == climate::CLIMATE_MODE_HEAT) {
-        return true;  // ON когда в режиме HEAT
-      } else {
-        return false; // OFF для всех других режимов
-      }
+    lambda: 'return id(thermostat_garage_konvector).mode == climate::CLIMATE_MODE_HEAT;'
  
-  # Бинарный сенсор для приема команды с pcf8574
+  # КОМАНДЫ ПО UDP (с логикой Override)
   - platform: packet_transport
     id: konvector_command
     internal: true
@@ -149,51 +172,55 @@ binary_sensor:
             auto call = id(thermostat_garage_konvector).make_call();
             call.set_mode(climate::CLIMATE_MODE_HEAT);
             call.perform();
+            if (id(in_peak)) {
+              id(manual_override) = true;
+              ESP_LOGI("udp", "Ручной перехват в пик (UDP)");
+            }
     on_release:
       then:
         - lambda: |-
             auto call = id(thermostat_garage_konvector).make_call();
             call.set_mode(climate::CLIMATE_MODE_OFF);
             call.perform();
+            id(manual_override) = false;
 
-# =================================================================================================================
 sensor:
   - platform: packet_transport
     provider: co2-sensor-garage
     remote_id: garage_temp
     id: garage_temp
     internal: true
+    filters:
+      - timeout:
+          timeout: 15min
+          value: nan # Защита: если датчик уснул, термостат выключится
 
   - platform: wifi_signal
     name: WiFi Strength
-    update_interval: 60s
     id: wifi_signal_db
 
   - platform: copy # Reports the WiFi signal strength in %
     source_id: wifi_signal_db
-    name: "WiFi Signal Percent"
+    name: WiFi Signal ${name}
     filters:
       - lambda: return min(max(2 * (x + 100.0), 0.0), 100.0);
     unit_of_measurement: "%"
     entity_category: "diagnostic"
     device_class: ""
-
+    
 climate:
   - platform: thermostat
     id: thermostat_garage_konvector
     name: "Thermostat ${name}"
-    visual:
-      min_temperature: 5
-      max_temperature: 25
-      temperature_step:
-        target_temperature: 1.0
-        current_temperature: 0.1
     sensor: garage_temp
+    # Убираем restore_mode, добавляем обязательные тайминги для защиты реле:
     min_heating_off_time: 10s
     min_heating_run_time: 10s
     min_idle_time: 10s
+    visual:
+      min_temperature: 5
+      max_temperature: 25
     heat_deadband: 1.0
-    heat_overrun: 0.0
     heat_action:
       - switch.turn_on: relay
     idle_action:
@@ -204,16 +231,7 @@ climate:
             id: konvector_state
             state: !lambda 'return x.mode == climate::CLIMATE_MODE_HEAT;'
 
-# Глобальные переменные для пикового времени
-globals:
-  - id: thermostat_state_before_peak
-    type: bool
-    initial_value: 'false'
-  - id: in_peak
-    type: bool
-    initial_value: 'false'
-
-# Логика пикового времени
+# ОСНОВНАЯ ЛОГИКА ПИКА
 interval:
   - interval: 60s
     then:
@@ -222,29 +240,44 @@ interval:
         if (!now.is_valid()) return;
         
         int hour = now.hour;
-        
-        // Определяем пиковое время: утро 7:00-10:00, вечер 17:00-21:00
         bool is_peak = (hour >= 7 && hour < 10) || (hour >= 17 && hour < 21);
-        bool was_in_peak = id(in_peak);
-        
-        if (is_peak && !was_in_peak && id(switch_peack_off).state) {
-          {
-          // Вход в пиковое время - сохраняем состояние
-          id(thermostat_state_before_peak) = (id(thermostat_garage_konvector).mode == climate::CLIMATE_MODE_HEAT);
+        bool peak_switch = id(switch_peack_off).state;
+
+        // Вход в пик
+        if (is_peak && !id(in_peak)) {
           id(in_peak) = true;
-          // Выключаем термостат
-          auto call = id(thermostat_garage_konvector).make_call();
-          call.set_mode(climate::CLIMATE_MODE_OFF);
-          call.perform();
+          id(manual_override) = false;
+          id(blink_blue_led).execute();
+          
+          if (peak_switch) {
+            id(thermostat_state_before_peak) = (id(thermostat_garage_konvector).mode == climate::CLIMATE_MODE_HEAT);
+            auto call = id(thermostat_garage_konvector).make_call();
+            call.set_mode(climate::CLIMATE_MODE_OFF);
+            call.perform();
+            ESP_LOGI("peak", "Начало пика: выключаем");
           }
-        } else if (!is_peak && was_in_peak) {
-          {
-          // Выход из пикового времени - восстанавливаем состояние
+        }
+        
+        // Выход из пика
+        else if (!is_peak && id(in_peak)) {
           id(in_peak) = false;
-          if (id(thermostat_state_before_peak)) {
+          id(manual_override) = false;
+          id(blink_blue_led).stop();
+          id(blue_led).turn_off().perform();
+          
+          if (peak_switch && id(thermostat_state_before_peak)) {
             auto call = id(thermostat_garage_konvector).make_call();
             call.set_mode(climate::CLIMATE_MODE_HEAT);
             call.perform();
+            ESP_LOGI("peak", "Конец пика: восстанавливаем");
           }
+        }
+        
+        // Принудительное удержание выключенным в пик (если нет override)
+        if (is_peak && peak_switch && !id(manual_override)) {
+          if (id(thermostat_garage_konvector).mode == climate::CLIMATE_MODE_HEAT) {
+            auto call = id(thermostat_garage_konvector).make_call();
+            call.set_mode(climate::CLIMATE_MODE_OFF);
+            call.perform();
           }
         }

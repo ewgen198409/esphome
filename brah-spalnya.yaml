@@ -21,13 +21,10 @@ ota:
   platform: esphome
 
 wifi:
-  <<: !include networks.yaml
-  # manual_ip:
-  #   static_ip: 192.168.1.126
-  #   gateway: 192.168.1.1
-  #   subnet: 255.255.255.0
-  #   dns1: 77.88.8.8
-  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  networks:
+    - ssid: "IoT"
+      password: "EwGeNiY507388"
+      hidden: true
 
 udp:
   id: udp_hub
