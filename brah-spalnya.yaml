@@ -21,10 +21,7 @@ ota:
   platform: esphome
 
 wifi:
-  networks:
-    - ssid: "IoT"
-      password: "EwGeNiY507388"
-      hidden: true
+  <<: !include networks.yaml
 
 udp:
   id: udp_hub

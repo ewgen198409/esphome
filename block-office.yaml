@@ -26,10 +26,7 @@ wifi:
     gateway: 192.168.1.1
     subnet: 255.255.255.0
   use_address: 192.168.1.154  # Используйте IP вместо .local
-  networks:
-    - ssid: "IoT"
-      password: "EwGeNiY507388"
-      hidden: true
+  <<: !include networks.yaml
   on_connect:
     then:
       - script.execute: blink_blue_leds # Вызываем скрипт для мигания синим

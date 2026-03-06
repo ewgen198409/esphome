@@ -50,10 +50,7 @@ wifi:
     static_ip: 192.168.1.164
     gateway: 192.168.1.1
     subnet: 255.255.255.0
-  networks:
-    - ssid: "IoT"
-      password: "EwGeNiY507388"
-      hidden: true
+  <<: !include networks.yaml
       
   use_address: 192.168.1.164  # Используйте IP вместо .local
   on_connect:

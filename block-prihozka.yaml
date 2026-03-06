@@ -35,10 +35,7 @@ wifi:
     gateway: 192.168.1.1
     subnet: 255.255.255.0
   use_address: 192.168.1.110  # Используйте IP вместо .local
-  networks:
-    - ssid: "IoT"
-      password: "EwGeNiY507388"
-      hidden: true
+  <<: !include networks.yaml
 
 # Отключить mDNS
 mdns:
@@ -159,12 +156,14 @@ sensor:
               return buffer;
             qos: 0
             retain: true
+            
   # DHT11
   - platform: dht
     pin: GPIO14
     id: dht11_dvor_sensor
     model: DHT11
     temperature:
+      accuracy_decimals: 1
       name: "Dvor Temperature"
       id: dvor_temp
       # filters:
@@ -172,6 +171,7 @@ sensor:
       unit_of_measurement: °C
     humidity:
       id: dvor_hum
+      accuracy_decimals: 1
       name: "Dvor Humidity"
       unit_of_measurement: '%'
     update_interval: 60s
