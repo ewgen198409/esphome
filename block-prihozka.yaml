@@ -12,9 +12,9 @@ esp8266:
 preferences:
   flash_write_interval: 5min
   
-# # Enable logging
-# logger:
-#   level: DEBUG
+# Enable logging
+logger:
+  level: DEBUG
 
 # debug:
 #   update_interval: 5s
@@ -29,13 +29,24 @@ ota:
 
 wifi:
   id: wifi_hub
-  power_save_mode: LIGHT
+  power_save_mode: NONE
   manual_ip:
     static_ip: 192.168.1.110
     gateway: 192.168.1.1
     subnet: 255.255.255.0
   use_address: 192.168.1.110  # Используйте IP вместо .local
-  <<: !include networks.yaml
+  fast_connect: true
+  networks:
+    - ssid: "IoT_Office"
+      password: "9514210798"
+      priority: 3
+    - ssid: "Keenetic-Home"
+      password: "9994554500"
+      priority: 0
+    - ssid: "IoT"
+      password: "EwGeNiY507388"
+      hidden: true
+      priority: 10
 
 # Отключить mDNS
 mdns:

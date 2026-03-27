@@ -18,8 +18,29 @@ ota:
     password: "f4052abea6ea206d17a1cb68fbb73c04"
 
 wifi:
-  <<: !include networks.yaml
+  # id: wifi_hub
+  # power_save_mode: LIGHT
+  # manual_ip:
+  #   static_ip: 192.168.1.141
+  #   gateway: 192.168.1.1
+  #   subnet: 255.255.255.0
+  # use_address: 192.168.1.141
+  fast_connect: True
+  networks:
+    - ssid: "IoT_Office"
+      password: "9514210798"
+      priority: 3
+    - ssid: "Keenetic-Home"
+      password: "9994554500"
+      priority: 0
+    - ssid: "IoT"
+      password: "EwGeNiY507388"
+      hidden: true
+      priority: 10
       
+# # Отключить mDNS
+# mdns:
+#   disabled: true
 
 udp:
   id: udp_hub

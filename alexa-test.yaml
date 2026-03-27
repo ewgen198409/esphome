@@ -1,0 +1,597 @@
+esphome:
+  name: alexa
+
+esp32:
+  board: esp32-c3-devkitm-1
+  framework:
+    type: esp-idf
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: "c+M3yRoST8qnH2fFAmCj9SJ3ZdECgc8o5/cZEGsKWBg="
+
+ota:
+  - platform: esphome
+    password: "312f283a0164fce9b713ecd13a3cf624"
+
+wifi:
+  <<: !include networks.yaml
+  use_address: 192.168.1.212
+  fast_connect: false
+  power_save_mode: none
+  on_connect:
+    then:
+      - if:
+          condition:
+            switch.is_on: rtttl_mute_switch
+          then:
+            - rtttl.play: 'wifi_connect:d=16,o=6,b=100:e,g'
+      - lambda: |-
+          id(led_ww).turn_on().set_brightness(1.0).set_rgb(1.0, 1.0, 0).set_effect("scan").perform();
+      - delay: 2s
+      - lambda: |-
+          id(led_ww).turn_off().perform();
+
+mdns:
+  disabled: true
+
+deep_sleep:
+  id: deep_sleep_1
+  wakeup_pin:
+    number: 5
+    allow_other_uses: true
+  wakeup_pin_mode: KEEP_AWAKE
+
+# --- Пьезо для rtttl (ledc, GPIO10) — без изменений ---
+output:
+  - platform: ledc
+    pin: GPIO10
+    inverted: false
+    id: rtttl_out
+
+rtttl:
+  output: rtttl_out
+
+# --- I2S ---
+i2s_audio:
+  i2s_lrclk_pin: GPIO3   # WS/LRC
+  i2s_bclk_pin: GPIO2    # SCK/BCLK
+
+# --- Микрофон ---
+microphone:
+  - platform: i2s_audio
+    id: esp32_microphone
+    i2s_din_pin: GPIO4    # SD
+    adc_type: external
+    pdm: false
+    channel: left
+    bits_per_sample: 32bit
+    bits_per_channel: 32bit
+    sample_rate: 16000
+
+# --- I2S Speaker — физический бэкенд ---
+speaker:
+  - platform: i2s_audio
+    id: esp32_i2s_speaker
+    dac_type: external
+    i2s_dout_pin: GPIO8   # DIN
+
+  # Mixer: объединяет два входных потока в один физический динамик.
+  # source_speakers создаёт два "слота" — в них пишут resampler'ы ниже.
+  - platform: mixer
+    id: audio_mixer
+    output_speaker: esp32_i2s_speaker
+    source_speakers:
+      - id: announcement_mixer_input   # слот для анонсов
+      - id: media_mixer_input          # слот для медиа
+
+  # Resampler для анонсов (TTS / voice assistant) → пишет в слот mixer'а
+  - platform: resampler
+    id: announcement_spk
+    output_speaker: announcement_mixer_input
+    sample_rate: 16000
+    num_channels: 1
+
+  # Resampler для медиа (музыка, стримы из HA) → пишет в слот mixer'а
+  - platform: resampler
+    id: media_spk
+    output_speaker: media_mixer_input
+    sample_rate: 16000
+    num_channels: 1
+
+# --- Нативный медиаплеер ---
+# media_player получает id resampler'ов (announcement_spk / media_spk),
+# а НЕ id mixer input слотов.
+media_player:
+  - platform: speaker
+    name: "Alexa Speaker"
+    id: device_media_player
+    announcement_pipeline:
+      speaker: announcement_spk
+      format: WAV
+      num_channels: 1
+      sample_rate: 16000
+    media_pipeline:
+      speaker: media_spk
+      format: WAV
+      num_channels: 1
+      sample_rate: 16000
+    # Для ESP32-C3 без PSRAM — раскомментировать если не хватает памяти:
+    codec_support_enabled: false
+
+# --- Голосовой ассистент ---
+voice_assistant:
+  id: assist
+  microphone:
+    microphone: esp32_microphone
+    gain_factor: 4              # ОБЯЗАТЕЛЬНО для bits_per_sample: 32bit (breaking change 2025.5)
+  media_player: device_media_player  # TTS воспроизводится через media_player
+  use_wake_word: true
+  noise_suppression_level: 2
+  auto_gain: 20dBFS
+  volume_multiplier: 2.0
+
+  on_wake_word_detected:
+    then:
+      - if:
+          condition:
+            switch.is_on: rtttl_mute_switch
+          then:
+            - rtttl.play: 'short_scale_up:d=32,o=5,b=100:c,d,e,f,g'
+
+  on_listening:
+    - light.turn_on:
+        id: led_ww
+        effect: "Smooth Center Pulse"
+
+  on_tts_start:
+    - lambda: |-
+        id(led_ww).turn_on().set_brightness(1.0).set_rgb(0, 1.0, 0).set_effect("scan").perform();
+
+  on_tts_end:
+    - lambda: |-
+        id(led_ww).turn_off().perform();
+
+  on_client_connected:
+    - if:
+        condition:
+          switch.is_on: use_wake_word
+        then:
+          - voice_assistant.start_continuous
+
+  on_client_disconnected:
+    - if:
+        condition:
+          switch.is_on: use_wake_word
+        then:
+          - voice_assistant.stop
+
+  on_error:
+    - rtttl.play: 'error_signal:d=16,o=5,b=100:c#,c,b_4'
+    - lambda: |-
+        id(led_ww).turn_on().set_brightness(1.0).set_rgb(1.0, 0, 0).set_effect("scan").perform();
+    - delay: 3s
+    - lambda: |-
+        id(led_ww).turn_off().perform();
+
+  on_timer_started:
+    then:
+      - rtttl.play: 'short_scale_up:d=32,o=5,b=100:e,g,c6'
+
+  on_timer_finished:
+    then:
+      - rtttl.play: 'alarm:d=16,o=5,b=100:c6,g,c6,g,c6,g'
+
+  on_timer_tick:
+    then:
+      - lambda: |-
+          // Синтаксис обновлён для ESPHome 2026.2+
+          for (auto& timer : timers) {
+            ESP_LOGV("timer", "Timer '%s' remaining: %d seconds",
+                     timer.name.c_str(), timer.seconds_left);
+          }
+
+binary_sensor:
+  # Кнопка "Громкость выше"
+  - platform: gpio
+    pin:
+      number: GPIO7
+      inverted: true
+      mode:
+        input: true
+        pullup: true
+    name: "Button 1"
+    internal: true
+    on_click:
+      then:
+        - if:
+            condition:
+              switch.is_on: rtttl_mute_switch
+            then:
+              - rtttl.play: 'button_click:d=32,o=6,b=100:c'
+    on_multi_click:
+      - timing:
+        - ON for at most 0.5s
+        - OFF for at least 0.5s
+        then:
+          - lambda: |-
+              float vol = id(device_media_player).volume;
+              if (vol < 1.0f) {
+                auto call = id(device_media_player).make_call();
+                call.set_volume(vol + 0.1f);
+                call.perform();
+              }
+          - script.execute: control_leds_dial_touched
+
+  # Кнопка "Вызов"
+  - platform: gpio
+    pin:
+      number: GPIO6
+      inverted: true
+      mode:
+        input: true
+        pullup: true
+    name: "Button 2"
+    internal: true
+    on_click:
+      then:
+        - if:
+            condition:
+              switch.is_on: rtttl_mute_switch
+            then:
+              - rtttl.play: 'button_click:d=32,o=6,b=100:c'
+    on_multi_click:
+      # Одиночный клик
+      - timing:
+        - ON for at most 0.5s
+        - OFF for at least 0.5s
+        then:
+          - if:
+              condition:
+                lambda: return id(use_wake_word).state;
+              then:
+                - delay: 0.5s
+                - lambda: |-
+                    auto call = id(led_ww).make_call();
+                    call.set_state(true);
+                    call.set_rgb(1.0, 0.0, 0.0);
+                    call.set_brightness(0.6);
+                    call.set_effect("fast pulse");
+                    call.perform();
+                - rtttl.play: 'error_signal:d=16,o=5,b=100:c#,c,b_4'
+                - delay: 2s
+                - lambda: |-
+                    id(led_ww).turn_off().perform();
+              else:
+                - rtttl.play: 'short_scale_up:d=32,o=5,b=100:c,d,e,f,g'
+                - delay: 1s
+                - voice_assistant.start
+                - lambda: |-
+                    auto call = id(led_ww).make_call();
+                    call.set_state(true);
+                    call.set_rgb(0.3, 0.3, 0.7);
+                    call.set_brightness(0.6);
+                    call.set_effect("fast pulse");
+                    call.perform();
+      # Долгое нажатие — переключить wake word
+      - timing:
+          - ON for at least 3s
+        then:
+          - switch.toggle: use_wake_word
+
+  # Кнопка "Выкл / Сон"
+  - platform: gpio
+    pin:
+      number: GPIO5
+      allow_other_uses: true
+      inverted: false
+      mode:
+        input: true
+        pulldown: true
+    name: "Button 3"
+    internal: true
+    on_click:
+      then:
+        - if:
+            condition:
+              switch.is_on: rtttl_mute_switch
+            then:
+              - rtttl.play: 'button_click:d=32,o=6,b=100:c'
+    on_multi_click:
+      - timing:
+          - ON for at least 3s
+        then:
+          - rtttl.play: 'scale_down:d=32,o=5,b=100:g,f,e,d,c'
+          - delay: 2s
+          - deep_sleep.enter: deep_sleep_1
+
+  # Кнопка "Громкость ниже"
+  - platform: gpio
+    pin:
+      number: GPIO9
+      inverted: true
+      mode:
+        input: true
+        pullup: true
+    name: "Button 4"
+    internal: true
+    on_click:
+      then:
+        - if:
+            condition:
+              switch.is_on: rtttl_mute_switch
+            then:
+              rtttl.play: 'button_click:d=32,o=6,b=100:c'
+    on_multi_click:
+      - timing:
+        - ON for at most 0.5s
+        - OFF for at least 0.5s
+        then:
+          - lambda: |-
+              float vol = id(device_media_player).volume;
+              if (vol > 0.0f) {
+                auto call = id(device_media_player).make_call();
+                call.set_volume(vol - 0.1f);
+                call.perform();
+              }
+          - script.execute: control_leds_dial_touched
+
+light:
+  - platform: esp32_rmt_led_strip
+    id: led_ww
+    rgb_order: GRB
+    pin: GPIO1
+    num_leds: 4
+    rmt_symbols: 48
+    use_psram: false
+    chipset: ws2812
+    name: "on board light"
+    effects:
+      - addressable_color_wipe:
+          name: "color wipe"
+      - pulse:
+          name: "Fast Pulse"
+          transition_length: 0.5s
+          update_interval: 0.5s
+          min_brightness: 0%
+          max_brightness: 100%
+      - addressable_scan:
+          name: "scan"
+      - addressable_lambda:
+          name: "Smooth Center Pulse"
+          update_interval: 50ms
+          lambda: |-
+            auto logical_to_physical = [](int logical_idx) -> int {
+              switch (logical_idx) {
+                case 0: return 3;
+                case 1: return 2;
+                case 2: return 0;
+                case 3: return 1;
+                default: return logical_idx;
+              }
+            };
+            const int pulse_period = 1000;
+            int color_phase = (millis() / pulse_period) % 3;
+            Color effect_color;
+            switch (color_phase) {
+              case 0: effect_color = Color(0, 0, 255);   break;
+              case 1: effect_color = Color(0, 255, 0);   break;
+              case 2: effect_color = Color(255, 255, 0); break;
+              default: effect_color = Color(0, 0, 255);  break;
+            }
+            int time_in_cycle = millis() % pulse_period;
+            float phase = (float)time_in_cycle * 2.0f * 3.14159f / (float)pulse_period;
+            float base_brightness = 0.1f + 0.9f * (sin(phase) + 1.0f) / 2.0f;
+            const float delay_offset = 3.14159f / 4.0f;
+            for (int i = 0; i < 4; i++) it[i] = Color::BLACK;
+            for (int logical_idx = 0; logical_idx < 2; logical_idx++) {
+              int physical_idx = logical_to_physical(logical_idx);
+              float brightness = max(0.1f, min(1.0f, base_brightness));
+              it[physical_idx] = Color(
+                (uint8_t)(effect_color.r * brightness),
+                (uint8_t)(effect_color.g * brightness),
+                (uint8_t)(effect_color.b * brightness)
+              );
+            }
+            for (int logical_idx = 2; logical_idx < 4; logical_idx++) {
+              int physical_idx = logical_to_physical(logical_idx);
+              float delayed_phase = phase - delay_offset;
+              float brightness = max(0.1f, min(1.0f, 0.1f + 0.9f * (sin(delayed_phase) + 1.0f) / 2.0f));
+              it[physical_idx] = Color(
+                (uint8_t)(effect_color.r * brightness),
+                (uint8_t)(effect_color.g * brightness),
+                (uint8_t)(effect_color.b * brightness)
+              );
+            }
+
+      - addressable_lambda:
+          name: "Volume Display"
+          update_interval: 30ms
+          lambda: |-
+            static float smoothed_volume = 0.0f;
+            static float target_volume = 0.0f;
+            static uint32_t last_update_time = 0;
+            static float fade_positions[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+            static bool first_run = true;
+            uint32_t current_time = millis();
+            if (first_run) {
+              last_update_time = current_time;
+              first_run = false;
+              smoothed_volume = id(device_media_player).volume;
+            }
+            float delta_time = (current_time - last_update_time) / 1000.0f;
+            last_update_time = current_time;
+            if (delta_time > 0.1f) delta_time = 0.1f;
+            float volume = id(device_media_player).volume;   // <- теперь из media_player
+            target_volume = volume;
+            float smoothing_factor = 12.0f;
+            smoothed_volume += (target_volume - smoothed_volume) * smoothing_factor * delta_time;
+            if (smoothed_volume < 0.0f) smoothed_volume = 0.0f;
+            if (smoothed_volume > 1.0f) smoothed_volume = 1.0f;
+            Color blue_color(30, 144, 255);
+            Color green_color(50, 205, 50);
+            Color orange_color(255, 165, 0);
+            Color red_color(220, 20, 60);
+            Color purple_color(138, 43, 226);
+            auto logical_to_physical = [](int logical_idx) -> int {
+              switch (logical_idx) {
+                case 0: return 3;
+                case 1: return 2;
+                case 2: return 0;
+                case 3: return 1;
+                default: return logical_idx;
+              }
+            };
+            auto lerp_color = [](const Color& a, const Color& b, float t) -> Color {
+              t = std::max(0.0f, std::min(1.0f, t));
+              return Color(
+                (uint8_t)(a.r + (b.r - a.r) * t),
+                (uint8_t)(a.g + (b.g - a.g) * t),
+                (uint8_t)(a.b + (b.b - a.b) * t)
+              );
+            };
+            auto get_volume_color = [&](float vol) -> Color {
+              if (vol <= 0.0f) return Color::BLACK;
+              else if (vol <= 0.25f) { float t = vol / 0.25f; return lerp_color(blue_color, green_color, t * 0.8f + 0.2f); }
+              else if (vol <= 0.5f)  { float t = (vol - 0.25f) / 0.25f; return lerp_color(green_color, orange_color, t); }
+              else if (vol <= 0.75f) { float t = (vol - 0.5f) / 0.25f; return lerp_color(orange_color, red_color, t); }
+              else return red_color;
+            };
+            if (smoothed_volume <= 0.01f) {
+              float pulse_cycle = (current_time % 3000) / 3000.0f;
+              float pulse_intensity = (sin(pulse_cycle * 2 * 3.14159f) + 1.0f) / 2.0f;
+              pulse_intensity = pulse_intensity * pulse_intensity * 0.4f;
+              Color muted_color = Color(
+                (uint8_t)(purple_color.r * pulse_intensity),
+                (uint8_t)(purple_color.g * pulse_intensity),
+                (uint8_t)(purple_color.b * pulse_intensity)
+              );
+              for (int i = 0; i < 4; i++) it[i] = muted_color;
+              return;
+            }
+            if (smoothed_volume >= 0.95f) {
+              float blink_cycle = (current_time % 800) / 800.0f;
+              float blink_intensity = 0.5f + ((sin(blink_cycle * 6 * 3.14159f) + 1.0f) / 2.0f) * 0.5f;
+              Color warning_color = Color(
+                (uint8_t)(red_color.r * blink_intensity),
+                (uint8_t)(red_color.g * blink_intensity * 0.3f),
+                (uint8_t)(red_color.b * blink_intensity * 0.3f)
+              );
+              for (int i = 0; i < 4; i++) it[i] = warning_color;
+              return;
+            }
+            float precise_leds = smoothed_volume * 4.0f;
+            int full_leds = (int)precise_leds;
+            float partial_led = precise_leds - full_leds;
+            float fade_speed = 8.0f;
+            for (int logical_idx = 0; logical_idx < 4; logical_idx++) {
+              float target_brightness = 0.0f;
+              if (logical_idx < full_leds) target_brightness = 1.0f;
+              else if (logical_idx == full_leds && partial_led > 0.0f)
+                target_brightness = partial_led * partial_led * (3.0f - 2.0f * partial_led);
+              float current_fade = fade_positions[logical_idx];
+              if (target_brightness > current_fade)
+                fade_positions[logical_idx] += (target_brightness - current_fade) * fade_speed * 1.5f * delta_time;
+              else
+                fade_positions[logical_idx] += (target_brightness - current_fade) * fade_speed * 0.8f * delta_time;
+              if (fade_positions[logical_idx] < 0.0f) fade_positions[logical_idx] = 0.0f;
+              if (fade_positions[logical_idx] > 1.0f) fade_positions[logical_idx] = 1.0f;
+            }
+            for (int logical_idx = 0; logical_idx < 4; logical_idx++) {
+              int physical_idx = logical_to_physical(logical_idx);
+              if (fade_positions[logical_idx] > 0.005f) {
+                Color base_color = get_volume_color(smoothed_volume);
+                float gamma_corrected = pow(fade_positions[logical_idx], 0.8f);
+                it[physical_idx] = Color(
+                  (uint8_t)(base_color.r * gamma_corrected),
+                  (uint8_t)(base_color.g * gamma_corrected),
+                  (uint8_t)(base_color.b * gamma_corrected)
+                );
+              } else {
+                it[physical_idx] = Color::BLACK;
+              }
+            }
+
+switch:
+  - platform: template
+    name: "Sound RTTTL Buzzer"
+    icon: mdi:volume-high
+    id: rtttl_mute_switch
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    entity_category: config
+
+  - platform: template
+    name: "Use wake word"
+    icon: mdi:microphone-outline
+    id: use_wake_word
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    entity_category: config
+    on_turn_on:
+      - rtttl.play: 'short_scale_up:d=32,o=5,b=100:c,d,e,f,g'
+      - lambda: id(assist).set_use_wake_word(true);
+      - if:
+          condition:
+            not:
+              - voice_assistant.is_running
+          then:
+            - voice_assistant.start_continuous
+    on_turn_off:
+      - rtttl.play: 'scale_down:d=32,o=5,b=100:g,f,e,d,c'
+      - voice_assistant.stop
+      - lambda: id(assist).set_use_wake_word(false);
+
+number:
+  # Громкость медиаплеера (отображается в HA, управляет device_media_player)
+  - platform: template
+    name: "Громкость"
+    icon: mdi:speaker-message
+    id: volume_level
+    min_value: 0
+    max_value: 100
+    step: 1
+    mode: slider
+    optimistic: true
+    initial_value: 50
+    restore_value: true
+    unit_of_measurement: "%"
+    entity_category: config
+    on_value:
+      then:
+        - lambda: |-
+            auto call = id(device_media_player).make_call();
+            call.set_volume(x / 100.0f);
+            call.perform();
+
+button:
+  - platform: restart
+    name: "Reboot"
+    id: reboot_button
+
+  - platform: template
+    name: "Sleep"
+    id: deep_sleep_button
+    entity_category: config
+    on_press:
+      then:
+        - rtttl.play: 'scale_down:d=32,o=5,b=100:g,f,e,d,c'
+        - delay: 5s
+        - deep_sleep.enter: deep_sleep_1
+
+script:
+  - id: control_leds_dial_touched
+    mode: restart
+    then:
+      - lambda: |-
+          auto brightness = std::max(id(led_ww).current_values.get_brightness(), 0.2f);
+          id(led_ww).turn_on()
+            .set_brightness(brightness)
+            .set_effect("Volume Display")
+            .perform();
+      - delay: 5s
+      - light.turn_off: led_ww

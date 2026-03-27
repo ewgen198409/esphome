@@ -58,6 +58,10 @@ wifi:
     dns1: 192.168.1.1
   use_address: 192.168.1.128
 
+# Отключить mDNS
+mdns:
+  disabled: true
+  
 text_sensor:
   - platform: wifi_info
     ip_address:

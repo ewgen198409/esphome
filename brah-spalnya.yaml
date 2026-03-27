@@ -21,7 +21,17 @@ ota:
   platform: esphome
 
 wifi:
-  <<: !include networks.yaml
+  networks:
+    - ssid: "IoT_Office"
+      password: "9514210798"
+      priority: 3
+    - ssid: "Keenetic-Home"
+      password: "9994554500"
+      priority: 0
+    - ssid: "IoT"
+      password: "EwGeNiY507388"
+      hidden: true
+      priority: 10
 
 udp:
   id: udp_hub

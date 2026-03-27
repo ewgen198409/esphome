@@ -26,8 +26,18 @@ ota:
     password: "312f283a0164fce9b713ecd13a3cf624"
 
 wifi:
-  <<: !include networks.yaml
-  use_address: 192.168.1.214
+  networks:
+    - ssid: "IoT_Office"
+      password: "9514210798"
+      priority: 3
+    - ssid: "Keenetic-Home"
+      password: "9994554500"
+      priority: 0
+    - ssid: "IoT"
+      password: "EwGeNiY507388"
+      hidden: true
+      priority: 10
+  use_address: 192.168.1.212
   fast_connect: false
   power_save_mode: none
   on_connect:
@@ -98,32 +108,11 @@ speaker:
 #         num_channels: 1
 #         format: WAV
 
-
-# micro_wake_word:
-#   microphone: esp32_microphone 
-#   stop_after_detection: true
-#   models:
-#     - id: alexa_model
-#       model: github://esphome/micro-wake-word-models/models/v2/alexa.json
-#       probability_cutoff: 0.6
-#   vad:
-#     model: github://esphome/micro-wake-word-models/models/v2/vad.json
-#   on_wake_word_detected:
-#     then:
-#       - if:
-#           condition:
-#               # Проверяем, что переключатель "rtttl_mute_switch" находится во включенном состоянии
-#             switch.is_on: rtttl_mute_switch
-#           then:
-#             - rtttl.play: 'short_scale_up:d=32,o=5,b=100:c,d,e,f,g'
-#       # Запускаем голосовой помощник после обнаружения ключевого слова
-#       - voice_assistant.start:
-#           wake_word: !lambda return wake_word;
-
-
 voice_assistant:
   id: assist
-  microphone: esp32_microphone
+  microphone:
+    microphone: esp32_microphone
+    gain_factor: 4
   speaker: esp32_mplayer
   use_wake_word: true
   noise_suppression_level: 2    #2
