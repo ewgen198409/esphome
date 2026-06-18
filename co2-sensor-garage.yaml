@@ -44,16 +44,9 @@ packet_transport:
 
 
 wifi:
-  <<: !include networks.yaml
-  use_address: 192.168.1.189  # Используйте IP вместо .local
-# Отключить mDNS
-mdns:
-  disabled: true
-  
-# external_components:
-#   source: github://ewgen198409/esphome/components
-#   components: [mq]
-#   refresh: 0s
+  ssid: "OpenWrt_Garage"
+  password: "EwGeNiY507388"
+
 
 captive_portal:
 
