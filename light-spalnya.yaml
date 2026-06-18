@@ -50,7 +50,7 @@ text_sensor:
       
   - platform: wifi_info
     ip_address:
-      name: IP Address ${device_name}
+      name: IP Address
     ssid:
       name: SSID
 
@@ -115,12 +115,12 @@ sensor:
       name: Light Spalnya посл. время работы
 # ===================================================================================
   - platform: wifi_signal
-    name: WiFi Strength ${device_name}
+    name: WiFi Strength
     update_interval: 60s
     id: wifi_signal_db
   - platform: copy # Reports the WiFi signal strength in %
     source_id: wifi_signal_db
-    name: "WiFi Signal Percent ${device_name}"
+    name: "WiFi Signal Percent"
     filters:
       - lambda: return min(max(2 * (x + 100.0), 0.0), 100.0);
     unit_of_measurement: "Signal %"
