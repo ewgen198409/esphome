@@ -53,17 +53,8 @@ ota:
     password: "0cf2d59e134cf13be87b10fd500c2e19"
 
 wifi:
-  <<: !include networks.yaml
-  min_auth_mode: WPA2
-  manual_ip:
-    static_ip: 192.168.1.245
-    gateway: 192.168.1.1
-    subnet: 255.255.255.0
-    dns1: 192.168.1.1
-  use_address: 192.168.1.245
-
-mdns:
-  disabled: true
+  ssid: "OpenWrt_Garage"
+  password: "EwGeNiY507388"
 
 text_sensor:
   - platform: wifi_info
