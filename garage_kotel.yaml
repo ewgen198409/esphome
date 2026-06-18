@@ -26,16 +26,8 @@ packet_transport:
 logger:
 
 wifi:
-  <<: !include networks.yaml
-  manual_ip:
-    static_ip: 192.168.1.218
-    gateway: 192.168.1.1
-    subnet: 255.255.255.0
-    dns1: 192.168.1.1
-  use_address: 192.168.1.218
-
-mdns:
-  disabled: true
+  ssid: "OpenWrt_Garage"
+  password: "EwGeNiY507388"
 
 time:
   - platform: sntp
