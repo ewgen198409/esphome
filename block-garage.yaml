@@ -39,7 +39,7 @@ logger:
 
 
 debug:
-  update_interval: 5s
+  update_interval: 60s
 
 # Enable Home Assistant API
 api:
@@ -50,17 +50,9 @@ ota:
   - platform: esphome
 
 wifi:
-  <<: !include networks.yaml
-  manual_ip:
-    static_ip: 192.168.1.128
-    gateway: 192.168.1.1
-    subnet: 255.255.255.0
-    dns1: 192.168.1.1
-  use_address: 192.168.1.128
+  ssid: "OpenWrt_Garage"
+  password: "EwGeNiY507388"
 
-# Отключить mDNS
-mdns:
-  disabled: true
   
 text_sensor:
   - platform: wifi_info
@@ -133,7 +125,7 @@ i2c:
   - id: pcf_bus
     sda: GPIO5
     scl: GPIO4
-    scan: true
+    scan: false
     frequency: 100kHz
 
 pcf8574:
@@ -146,7 +138,8 @@ display:
   - platform: lcd_pcf8574
     dimensions: 16x2
     address: 0x27
-    update_interval: 100ms
+    id: my_display
+    update_interval: 500ms
     lambda: |-
       // Приоритет 1: Сообщения сигнализации
       if (id(alarm_message) != 0) {
