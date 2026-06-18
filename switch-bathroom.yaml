@@ -17,31 +17,16 @@ ota:
     password: "f4050abea6ea206d17a1cb68fbb73c04"
 
 wifi:
+  min_auth_mode: WPA2
   networks:
     - ssid: "IoT_Office"
       password: "9514210798"
       priority: 3
-    - ssid: "Keenetic-Home"
-      password: "9994554500"
-      priority: 0
     - ssid: "IoT"
       password: "EwGeNiY507388"
       hidden: true
       priority: 10
-  use_address: 192.168.1.141  # Используйте IP вместо .local
-  manual_ip:
-    static_ip: 192.168.1.141
-    gateway: 192.168.1.1
-    subnet: 255.255.255.0
 
-# Отключить mDNS
-mdns:
-  disabled: true
-
-# mqtt:
-#   broker: 192.168.1.230
-#   username: "hassmqtt"
-#   password: "hassmqtt"
 
 text_sensor:
   - platform: wifi_info
@@ -179,6 +164,12 @@ binary_sensor:
           - light.turn_on: light_2
           - light.turn_off: backlight
 
+      # long press reboot (должен быть ПЕРВЫМ, чтобы проверялся до 1s)
+      - timing:
+          - ON for at least 5s
+        then:
+          - button.press: reboot
+
       # Длинное нажатие / Удержание (state=3)
       - timing:
           - ON for at least 1s
@@ -188,9 +179,3 @@ binary_sensor:
           - light.turn_on:
               id: backlight
               effect: "Slow Pulse"
-
-      # long press    reboot
-      - timing:
-          - ON for at least 5s
-        then:
-          - button.press: reboot
