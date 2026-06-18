@@ -104,6 +104,7 @@ sensor:
     device_class: "temperature"
     state_class: "measurement"
     accuracy_decimals: 1
+
 # ================== Init relay =========================================
 output:
   - id: light_output0
