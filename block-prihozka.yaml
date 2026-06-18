@@ -30,11 +30,11 @@ ota:
 wifi:
   id: wifi_hub
   power_save_mode: NONE
-  manual_ip:
-    static_ip: 192.168.1.110
-    gateway: 192.168.1.1
-    subnet: 255.255.255.0
-  use_address: 192.168.1.110  # Используйте IP вместо .local
+  # manual_ip:
+  #   static_ip: 192.168.1.110
+  #   gateway: 192.168.1.1
+  #   subnet: 255.255.255.0
+  # use_address: 192.168.1.110  # Используйте IP вместо .local
   fast_connect: true
   networks:
     - ssid: "IoT_Office"
@@ -48,9 +48,9 @@ wifi:
       hidden: true
       priority: 10
 
-# Отключить mDNS
-mdns:
-  disabled: true
+# # Отключить mDNS
+# mdns:
+#   disabled: true
 
 # ===================== MQTT ========================================
 mqtt:
