@@ -90,12 +90,14 @@ udp:
 packet_transport:
   - platform: udp
     binary_sensors:
-      - fan_state_trigger                 # Публикуем этот сенсор
-      - lamp_control_trigger
-      - konvector_command
-      - kotel_command
+      - id: fan_state_trigger
+      - id: lamp_control_trigger
+      - id: konvector_command
+      - id: kotel_command
     sensors:
-      - sensor_garage_temp
+      - id: sensor_garage_temp
+    update_interval: 5s
+    udp_id: udp_hub
 
 # ================= TIME ====================================
 time:
@@ -110,6 +112,7 @@ sun:
   latitude: 54.9293  # Укажите вашу широту
   longitude: 73.2045 # Укажите вашу долготу
   id: sun0
+  time_id: ntp_time
 # ===================================================================================
 
 # Button Reboot ======================================================================
@@ -117,15 +120,20 @@ button:
   - platform: restart
     name: "Reboot"
     id: reboot_button
+    device_class: restart
+    icon: "mdi:refresh"
 
 one_wire:
   - platform: gpio
     pin: GPIO3
+    id: one_wire_bus
 
 i2c:
   - id: pcf_bus
-    sda: GPIO5
-    scl: GPIO4
+    sda:
+      number: GPIO5
+    scl:
+      number: GPIO4
     scan: false
     frequency: 100kHz
 
@@ -133,6 +141,7 @@ pcf8574:
   - id: 'pcf8574_hub'
     address: 0x20
     pcf8575: false
+    i2c_id: pcf_bus
 
 # Display ==========================================================================================
 display:
@@ -364,6 +373,7 @@ display:
 
         it.printf(9, 1, "co:%.1f%%", id(co_sensor_garage).state);
       }
+    i2c_id: pcf_bus
 
 
 # ===========================================================================================================
@@ -382,6 +392,8 @@ sensor:
     accuracy_decimals: 1
     filters:
       - lambda: return x ${temp_sensor_calibrate};
+    one_wire_id: one_wire_bus
+    entity_category: diagnostic
 
 # Temperature sensor с устройства CO2_Garage ========================================================================
   - platform: packet_transport
@@ -394,6 +406,7 @@ sensor:
     device_class: "temperature"
     state_class: "measurement"
     accuracy_decimals: 1
+    entity_category: diagnostic
 
 # CO sensor garage ==================================================================================================
   - platform: packet_transport
@@ -412,6 +425,8 @@ sensor:
     update_interval: 60s
     id: wifi_signal_db
     internal: true
+    icon: "mdi:wifi"
+    device_class: signal_strength
 
   - platform: copy # Reports the WiFi signal strength in %
     source_id: wifi_signal_db
