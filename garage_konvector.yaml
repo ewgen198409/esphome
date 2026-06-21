@@ -53,6 +53,7 @@ ota:
     password: "0cf2d59e134cf13be87b10fd500c2e19"
 
 wifi:
+  min_auth_mode: WPA2
   ssid: "OpenWrt_Garage"
   password: "EwGeNiY507388"
 
