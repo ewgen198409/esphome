@@ -44,7 +44,6 @@ packet_transport:
     binary_sensors:
       - binary_switch_1
       - binary_switch_2
-      - binary_switch_reboot_remote
 
 text_sensor:
   - platform: libretiny
