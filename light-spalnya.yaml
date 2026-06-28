@@ -22,14 +22,18 @@ wifi:
     - ssid: "IoT_Office"
       password: "9514210798"
       priority: 3
-    - ssid: "Keenetic-Home"
-      password: "9994554500"
-      priority: 0
+      hidden: true
     - ssid: "IoT"
       password: "EwGeNiY507388"
-      hidden: true
       priority: 10
-  
+      hidden: true
+
+# ===============================================================
+button:
+  - platform: restart
+    name: Reboot
+    id: reboot
+      
 udp:
   id: udp_hub
 
@@ -37,6 +41,7 @@ packet_transport:
   - platform: udp
     binary_sensors:
       - binary_switch
+      - binary_switch_reboot
 
 text_sensor:
   - platform: libretiny
@@ -50,7 +55,7 @@ text_sensor:
       name: SSID
 
 binary_sensor:
-  # Принимаем из сети бинаный сенсор (binary_switch_1 и binary_switch_2 из выключателей бра) и управляем им основным светом
+  # Принимаем из сети бинарный сенсор (binary_switch_1 из выключателей бра) и управляем им основным светом
   - platform: packet_transport
     provider: brah-spalnya
     id: binary_switch_bra_1
@@ -62,6 +67,7 @@ binary_sensor:
         then:
           light.toggle: spalnya_lamp
 
+  # Принимаем binary_switch_2 из выключателей бра
   - platform: packet_transport
     provider: brah-spalnya
     id: binary_switch_bra_2
@@ -73,6 +79,7 @@ binary_sensor:
         then:
           light.toggle: spalnya_lamp
 
+  # Физическая кнопка P6
   - platform: gpio
     id: binary_switch
     pin:
@@ -94,7 +101,27 @@ binary_sensor:
                   effect: "strobe"
               else:
                 - light.turn_off: status_led_1
-                
+
+      # long press >10s reboot both
+      - timing:
+          - ON for at least 10s
+        then:
+          - script.execute: reboot_both
+
+  # Виртуальный сенсор reboot для отправки по packet_transport на brah-spalnya
+  - platform: template
+    id: binary_switch_reboot
+    internal: true
+
+script:
+  - id: reboot_both
+    then:
+      - binary_sensor.template.publish:
+          id: binary_switch_reboot
+          state: ON
+      - delay: 500ms
+      - button.press: reboot
+
 # ================== Счетик времени включенного света =======================
 sensor:
   - platform: duty_time
