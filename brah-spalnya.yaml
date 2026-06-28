@@ -31,6 +31,11 @@ wifi:
       hidden: true
       priority: 10
 
+button:
+  - platform: restart
+    name: "Reboot Brah"
+    id: reboot_brah
+
 udp:
   id: udp_hub
 
@@ -39,6 +44,7 @@ packet_transport:
     binary_sensors:
       - binary_switch_1
       - binary_switch_2
+      - binary_switch_reboot_remote
 
 text_sensor:
   - platform: libretiny
@@ -75,6 +81,11 @@ binary_sensor:
         - OFF for at least 0.5s
         then:
           - light.toggle: brah_spalnya_lamp
+      # long press >10s reboot only self
+      - timing:
+          - ON for at least 10s
+        then:
+          - button.press: reboot_brah
 
   - platform: gpio
     id: binary_switch_2
@@ -88,6 +99,21 @@ binary_sensor:
         - OFF for at least 0.5s
         then:
           - light.toggle: brah_spalnya_lamp
+      # long press >10s reboot only self
+      - timing:
+          - ON for at least 10s
+        then:
+          - button.press: reboot_brah
+
+  # Принимаем сигнал reboot от light-spalnya
+  - platform: packet_transport
+    provider: light-spalnya
+    id: binary_switch_reboot_remote
+    remote_id: binary_switch_reboot
+    internal: true
+    on_press:
+      then:
+        button.press: reboot_brah
              
 # ================== Счетик времени включенного света =======================
 sensor:
