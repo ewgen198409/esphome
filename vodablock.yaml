@@ -48,14 +48,11 @@ ota:
 wifi:
   min_auth_mode: WPA2
   power_save_mode: LIGHT
-  manual_ip:
-    static_ip: 192.168.1.164
-    gateway: 192.168.1.1
-    subnet: 255.255.255.0
   networks:
     - ssid: "IoT_Office"
       password: "9514210798"
       priority: 3
+      hidden: true
     - ssid: "IoT"
       password: "EwGeNiY507388"
       hidden: true
