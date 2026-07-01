@@ -54,6 +54,12 @@ wifi:
   ssid: "OpenWrt_Garage"
   password: "EwGeNiY507388"
 
+  # Аварийная точка доступа, если WiFi недоступен
+  ap:
+    ssid: "Garage-AP"
+    password: "1234567890"
+
+captive_portal:
   
 text_sensor:
   - platform: wifi_info
