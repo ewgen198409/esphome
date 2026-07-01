@@ -847,7 +847,11 @@ binary_sensor:
                 id(two_lamp).turn_on().perform();
                 id(three_lamp).turn_on().perform();
               }
-
+      # long press reboot   
+      - timing:
+          - ON for at least 10s
+        then:
+          - button.press: reboot_button
 # Button Panel ===============================================================================
   - platform: gpio
     pin:
