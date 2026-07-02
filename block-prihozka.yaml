@@ -3,7 +3,12 @@ esphome:
 #  friendly_name: Block_Prihozka
   platformio_options:
     board_build.ldscript: eagle.flash.4m2m.ld
+  on_boot:
+    priority: -100
+    then:
+      - component.update: reset_reason_sensor
 
+      
 esp8266:
   board: d1_mini
   restore_from_flash: true
@@ -88,6 +93,25 @@ text_sensor:
                 currTime.hour, currTime.minute, currTime.second);
       return {str};  // Возвращаем строку как текстовый сенсор
     update_interval: 60s
+
+  - platform: template
+    name: "Причина последней перезагрузки"
+    id: reset_reason_sensor
+    icon: mdi:restart-alert
+    lambda: |-
+      struct rst_info *rtc_info = system_get_rst_info();
+      char buf[128];
+      snprintf(buf, sizeof(buf),
+        "Reason: %d, exccause: %d, epc1: 0x%08x, epc2: 0x%08x, epc3: 0x%08x, excvaddr: 0x%08x, depc: 0x%08x",
+        rtc_info->reason,
+        rtc_info->exccause,
+        rtc_info->epc1,
+        rtc_info->epc2,
+        rtc_info->epc3,
+        rtc_info->excvaddr,
+        rtc_info->depc);
+      return { std::string(buf) };
+    update_interval: never
 # ================== Init relay ================================
 switch:
   - platform: gpio
@@ -449,3 +473,9 @@ number:
     restore_value: true
     mode: box
   # =============================================================================================
+globals:
+  - id: last_reset_reason
+    type: std::string
+    restore_value: false
+    initial_value: '""'
+
