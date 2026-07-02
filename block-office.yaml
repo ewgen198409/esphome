@@ -125,7 +125,7 @@ sensor:
     address: 0x63d829190264ff28
     name: Температура в офисе
     id: sensor_office_temp
-    update_interval: 10s
+    update_interval: 31s
     unit_of_measurement: "°C"
     icon: mdi:thermometer
     device_class: "temperature"
@@ -409,30 +409,38 @@ binary_sensor:
 interval:
   - interval: 30s
     then:
+      # Шаг 1: обновляем панель кнопок
       - lambda: |-
           if (id(ntp_time).now().is_valid() && id(night_switch).state && !id(sun0).is_above_horizon()) {
             if (!id(door_switch).state) {
-              // Дверь закрыта, включаем с эффектами
               id(led_button_panel).turn_on()
                 .set_brightness(1.0)
                 .set_rgb(0, 1.0, 0)
                 .set_effect(std::string(id(led_effect_select).current_option()))
                 .perform();
             } else {
-              // Дверь открыта, включаем без эффектов
               id(led_button_panel).turn_on()
                 .set_brightness(0.7)
                 .set_rgb(0, 1.0, 0)
                 .set_effect(std::string(id(led_effect_select).current_option()))
                 .perform();
             }
+          } else {
+            id(led_button_panel).turn_off().perform();
+          }
+
+      # Пауза между двумя битбэнг-передачами
+      - delay: 20ms
+
+      # Шаг 2: обновляем ленту двери
+      - lambda: |-
+          if (id(ntp_time).now().is_valid() && id(night_switch).state && !id(sun0).is_above_horizon()) {
             id(led_door).turn_on()
               .set_brightness(0.9)
               .set_rgb(0, 1.0, 0)
               .set_effect(std::string("scan"))
               .perform();
           } else {
-            id(led_button_panel).turn_off().perform();
             id(led_door).turn_off().perform();
           }
 # ===================================================================================================
