@@ -18,16 +18,10 @@ ota:
     password: "f4052abea6ea206d17a1cb68fbb73c04"
 
 wifi:
-
   networks:
-    - ssid: "IoT_Office"
-      password: "9514210798"
-      priority: 3
-
     - ssid: "IoT"
       password: "EwGeNiY507388"
       hidden: true
-      priority: 10
 
 udp:
   id: udp_hub
@@ -208,6 +202,12 @@ binary_sensor:
           - light.turn_on: prih_left_lamp
           - light.turn_off: led_light_lamp
 
+      # long press    reboot
+      - timing:
+          - ON for at least 5s
+        then:
+          - button.press: reboot
+          
       # long press
       - timing:
           - ON for at least 1.0s
@@ -216,11 +216,7 @@ binary_sensor:
           - light.turn_off: prih_left_lamp
           - light.turn_on: led_light_lamp
 
-      # long press    reboot
-      - timing:
-          - ON for at least 5s
-        then:
-          - button.press: reboot
+
 
 
       # # triple click               |     Задействован 
