@@ -24,6 +24,7 @@ esphome:
               id: garage_lock
               state: UNLOCKED
 
+    - component.update: reset_reason_sensor
 
 
 esp8266:
@@ -82,6 +83,26 @@ text_sensor:
       strftime(str, sizeof(str), "%H:%M", localtime(&currTime));
       return { str };
     update_interval: 60s
+
+  - platform: template
+    name: "Причина последней перезагрузки"
+    entity_category: "diagnostic"
+    id: reset_reason_sensor
+    icon: mdi:restart-alert
+    lambda: |-
+      struct rst_info *rtc_info = system_get_rst_info();
+      char buf[128];
+      snprintf(buf, sizeof(buf),
+        "Reason: %d, exccause: %d, epc1: 0x%08x, epc2: 0x%08x, epc3: 0x%08x, excvaddr: 0x%08x, depc: 0x%08x",
+        rtc_info->reason,
+        rtc_info->exccause,
+        rtc_info->epc1,
+        rtc_info->epc2,
+        rtc_info->epc3,
+        rtc_info->excvaddr,
+        rtc_info->depc);
+      return { std::string(buf) };
+    update_interval: never
 
 status_led:
   pin:
@@ -1232,6 +1253,11 @@ globals:
     type: bool
     restore_value: yes  # Сохраняет значение после перезагрузки
     initial_value: 'false'  # Начальное значение (false = UNLOCKED, true = LOCKED)
+
+  - id: last_reset_reason
+    type: std::string
+    restore_value: false
+    initial_value: '""'
 
 # Добавляем интервал для проверки таймаута меню
 interval:
