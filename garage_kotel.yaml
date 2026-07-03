@@ -27,14 +27,9 @@ logger:
 
 wifi:
   networks:
-    - ssid: "IoT_Office"
-      password: "9514210798"
-      priority: 3
-      hidden: true
-    - ssid: "IoT"
+    - ssid: "OpenWrt_Garage"
       password: "EwGeNiY507388"
       hidden: true
-      priority: 10
 
 time:
   - platform: sntp
