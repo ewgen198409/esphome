@@ -44,9 +44,10 @@ packet_transport:
 
 
 wifi:
-  min_auth_mode: WPA2
-  ssid: "OpenWrt_Garage"
-  password: "EwGeNiY507388"
+  networks:
+    - ssid: "OpenWrt_Garage"
+      password: "EwGeNiY507388"
+      hidden: true
 
 
 captive_portal:
