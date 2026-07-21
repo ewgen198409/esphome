@@ -58,7 +58,8 @@
             },
             "options": {
                 "cwd": "${workspaceFolder}"
-            }
+            },
+            "problemMatcher": []
         },
         {
             "label": "ESPHome: Проверить активный файл",
