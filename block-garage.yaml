@@ -827,28 +827,28 @@ binary_sensor:
     on_multi_click:
       # Single click (одиночное нажатие)
       - timing:
-          - ON for at most 400ms
-          - OFF for at least 300ms
+          - ON for at most 500ms
+          - OFF for at least 500ms
         then:
           - light.turn_on: one_lamp
 
       # Double click (двойное нажатие)
       - timing:
-          - ON for at most 400ms
-          - OFF for at most 400ms
-          - ON for at most 400ms
-          - OFF for at least 300ms
+          - ON for at most 500ms
+          - OFF for at most 500ms
+          - ON for at most 500ms
+          - OFF for at least 500ms
         then:
           - light.turn_on: two_lamp
 
       # Triple click (тройное нажатие)
       - timing:
-          - ON for at most 400ms
-          - OFF for at most 400ms
-          - ON for at most 400ms
-          - OFF for at most 400ms
-          - ON for at most 400ms
-          - OFF for at least 300ms
+          - ON for at most 500ms
+          - OFF for at most 500ms
+          - ON for at most 500ms
+          - OFF for at most 500ms
+          - ON for at most 500ms
+          - OFF for at least 500ms
         then:
           - light.turn_on: three_lamp
 
