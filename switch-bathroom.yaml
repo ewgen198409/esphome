@@ -123,6 +123,8 @@ binary_sensor:
     id: bathroom_button
     name: "Bathroom Button"
     internal: false
+    filters:
+      - delayed_on_off: 50ms
     pin:
       number: GPIO14
       mode: INPUT_PULLUP
@@ -158,7 +160,7 @@ binary_sensor:
           - OFF for at most 0.5s
           - ON for at most 0.5s
           - OFF for at most 0.5s
-          - ON for at most 0.5s
+          - ON for at least 0.5s
         then:
           - light.turn_on: light_1
           - light.turn_on: light_2
