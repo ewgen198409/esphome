@@ -122,7 +122,7 @@ binary_sensor:
   - platform: gpio
     id: bathroom_button
     name: "Bathroom Button"
-    internal: true
+    internal: false
     pin:
       number: GPIO14
       mode: INPUT_PULLUP
