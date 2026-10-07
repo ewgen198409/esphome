@@ -1,7 +1,10 @@
 networks:
+  - ssid: "OpenWrt_Home"
+    password: "EwGeNiY507388"
+    priority: 0
   - ssid: "OpenWrt"
     password: "9514210798"
-    priority: 0
+    priority: 1
   - ssid: "IoT_Office"
     password: "9514210798"
     priority: 3

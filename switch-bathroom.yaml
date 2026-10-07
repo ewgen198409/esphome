@@ -18,14 +18,7 @@ ota:
 
 wifi:
   min_auth_mode: WPA2
-  networks:
-    - ssid: "IoT_Office"
-      password: "9514210798"
-      priority: 3
-    - ssid: "IoT"
-      password: "EwGeNiY507388"
-      hidden: true
-      priority: 10
+  <<: !include networks.yaml
 
 
 text_sensor:

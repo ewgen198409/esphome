@@ -26,7 +26,7 @@ esp32:
     type: esp-idf
 
 preferences:
-  flash_write_interval: 5min
+  flash_write_interval: 30min
 
 external_components:
   - source:
@@ -43,20 +43,11 @@ api:
 
 ota:
   - platform: esphome
-    password: "b3b7c4a68f7147b050484af41caebfb1"
+#    password: "b3b7c4a68f7147b050484af41caebfb1"
 
 wifi:
   min_auth_mode: WPA2
-  power_save_mode: LIGHT
-  networks:
-    - ssid: "IoT_Office"
-      password: "9514210798"
-      priority: 3
-      hidden: true
-    - ssid: "IoT"
-      password: "EwGeNiY507388"
-      hidden: true
-      priority: 10
+  <<: !include networks.yaml
   on_connect:
     then:
       - rtttl.play: 'scale_up:d=32,o=5,b=100:c,c#,d#,e,f#,g#,a#,b'
@@ -198,7 +189,7 @@ switch:
 
       # если активен режим авто по таймеру - выключить его
       - lambda: |-
-          if (id(auto_fantimer)){
+          if (id(auto_fantimer).state){
             id(auto_fantimer).turn_off();
           }
 
@@ -225,7 +216,7 @@ switch:
     turn_on_action:
       # если активен режим авто по влажности - выключить его
       - lambda: |-
-          if (id(auto_mode_switch)){
+          if (id(auto_mode_switch).state){
             id(auto_mode_switch).turn_off();
           }
 

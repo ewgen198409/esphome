@@ -21,15 +21,7 @@ ota:
   platform: esphome
 
 wifi:
-  networks:
-    - ssid: "IoT_Office"
-      password: "9514210798"
-      priority: 3
-      hidden: true
-    - ssid: "IoT"
-      password: "EwGeNiY507388"
-      hidden: true
-      priority: 10
+  <<: !include networks.yaml
 
 button:
   - platform: restart

@@ -18,18 +18,11 @@ api:
       - script.execute: blink_red_leds # Вызываем скрипт для мигания красным
 ota:
   - platform: esphome
-    password: "3a2b0c2cc547a398831e1f0a8119c649"
+#    password: "3a2b0c2cc547a398831e1f0a8119c649"
 
 wifi:
   min_auth_mode: WPA2
-  networks:
-    - ssid: "IoT_Office"
-      password: "9514210798"
-      priority: 3
-    - ssid: "IoT"
-      password: "EwGeNiY507388"
-      hidden: true
-      priority: 10
+  <<: !include networks.yaml
   on_connect:
     then:
       - script.execute: blink_blue_leds # Вызываем скрипт для мигания синим
